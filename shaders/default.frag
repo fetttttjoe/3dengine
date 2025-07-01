@@ -1,10 +1,9 @@
 #version 330 core
-out vec4 FragColor;
+layout (location = 0) out uint o_ObjectID;
 
-// Uniform for passing a dynamic color from the C++ code
-uniform vec4 u_Color;
+uniform uint u_ObjectID;
 
 void main()
 {
-    FragColor = u_Color;
+    o_ObjectID = u_ObjectID;
 }
