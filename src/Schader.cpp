@@ -17,6 +17,18 @@ Shader::Shader(const std::string &vp, const std::string &fp)
     m_RendererID = createShaderProgram(vsSrc, fsSrc);
 }
 
+
+// NEW CONSTRUCTOR: Loads from string literals (memory)
+Shader::Shader(const char* vertexSource, const char* fragmentSource, bool fromMemory)
+    : m_RendererID(0)
+{
+    // The 'fromMemory' flag is currently unused in this implementation,
+    // but it allows you to overload more clearly if needed for other logic.
+    // For now, we just directly use the provided sources.
+    m_RendererID = createShaderProgram(vertexSource, fragmentSource);
+}
+
+
 Shader::~Shader() {
     if (m_RendererID) glDeleteProgram(m_RendererID);
 }

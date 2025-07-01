@@ -1,14 +1,13 @@
 #pragma once
 #include <glm/glm.hpp>
-#include <functional> // NEW: Include for std::function (the callback)
+#include <functional> 
 
-struct GLFWwindow; // Forward declare GLFWwindow
+struct GLFWwindow;
 
 class Camera {
 public:
     Camera(GLFWwindow* window, glm::vec3 position = glm::vec3(0.0f, 2.0f, 8.0f));
 
-    // REFACTORED: Now accepts a callback to notify when the camera has updated.
     void HandleInput(float deltaTime, std::function<void()> onUpdateCallback);
     
     void ProcessMouseScroll(float yoffset);
@@ -16,17 +15,20 @@ public:
 
     const glm::mat4& GetViewMatrix() const { return m_ViewMatrix; }
     const glm::mat4& GetProjectionMatrix() const { return m_ProjectionMatrix; }
+    
+    // --- NEW HELPER METHODS ---
+    glm::vec3 GetPosition() const { return m_Position; }
+    glm::vec3 WorldToScreenDirection(const glm::vec3& worldDir) const;
+
 
 private:
     void updateMatrices();
     
-    // REFACTORED: These now return a boolean to indicate if they caused a change.
     bool processKeyboard(float deltaTime);
     bool processMouseMovement(float xoffset, float yoffset);
 
     GLFWwindow* m_Window;
 
-    // ... other member variables remain the same ...
     glm::vec3 m_Position;
     glm::vec3 m_Front;
     glm::vec3 m_Up;

@@ -1,8 +1,8 @@
-// Scene/Objects/BaseObject.cpp
 #include "BaseObject.h"
 #include "Shader.h"
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
+#include <glm/gtx/matrix_decompose.hpp> 
 
 BaseObject::BaseObject() {
     // Generate GL buffers & arrays
@@ -21,6 +21,24 @@ BaseObject::~BaseObject() {
     if (m_VBO) glDeleteBuffers(1, &m_VBO);
     if (m_VAO) glDeleteVertexArrays(1, &m_VAO);
 }
+
+glm::vec3 BaseObject::GetPosition() const {
+    return glm::vec3(transform[3]);
+}
+
+void BaseObject::SetPosition(const glm::vec3& position) {
+    transform[3] = glm::vec4(position, 1.0f);
+}
+
+glm::vec3 BaseObject::GetEulerAngles() const {
+    glm::vec3 scale, skew, position;
+    glm::quat rotation;
+    glm::vec4 perspective;
+    glm::decompose(transform, scale, rotation, position, skew, perspective);
+    return glm::degrees(glm::eulerAngles(rotation));
+}
+
+// --- EXISTING METHODS ---
 
 void BaseObject::SetupMesh(const std::vector<float> &vertices,
                            const std::vector<unsigned int> &indices)

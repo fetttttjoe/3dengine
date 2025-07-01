@@ -3,7 +3,7 @@
 #include <GLFW/glfw3.h>
 #include <iostream>
 
-// Constructor remains the same
+// Constructor and other methods from your file remain the same...
 Camera::Camera(GLFWwindow* window, glm::vec3 position) :
     m_Window(window),
     m_Position(position),
@@ -26,7 +26,6 @@ Camera::Camera(GLFWwindow* window, glm::vec3 position) :
     updateMatrices();
 }
 
-// REFACTORED: Main input handler now calls the callback if a change occurs.
 void Camera::HandleInput(float deltaTime, std::function<void()> onUpdateCallback) {
     bool keyboardMoved = processKeyboard(deltaTime);
     bool mouseMoved = false;
@@ -48,7 +47,6 @@ void Camera::HandleInput(float deltaTime, std::function<void()> onUpdateCallback
         m_LastX = (float)xpos;
         m_LastY = (float)ypos;
 
-        // Only consider it "moved" if there was a non-zero offset
         if (xoffset != 0.0f || yoffset != 0.0f) {
             mouseMoved = processMouseMovement(xoffset, yoffset);
         }
@@ -56,14 +54,11 @@ void Camera::HandleInput(float deltaTime, std::function<void()> onUpdateCallback
         m_IsOrbiting = false;
     }
     
-    // If either input method changed the camera, trigger the callback.
     if ((keyboardMoved || mouseMoved) && onUpdateCallback) {
         onUpdateCallback();
     }
 }
 
-// NOTE: No changes needed here. The Application's scroll_callback handles
-// requesting the redraw after calling this function.
 void Camera::ProcessMouseScroll(float yoffset) {
     m_Position += m_Front * yoffset * 0.5f;
     updateMatrices();
@@ -75,6 +70,30 @@ void Camera::SetAspectRatio(float aspectRatio) {
         updateMatrices();
     }
 }
+
+// --- NEW METHOD IMPLEMENTATION ---
+glm::vec3 Camera::WorldToScreenDirection(const glm::vec3& worldDir) const {
+    glm::mat4 vp = m_ProjectionMatrix * m_ViewMatrix;
+
+    // Use two points to define the direction vector in world space
+    glm::vec4 p1_world = glm::vec4(m_Position, 1.0f);
+    glm::vec4 p2_world = glm::vec4(m_Position + worldDir, 1.0f);
+
+    // Transform to clip space
+    glm::vec4 p1_clip = vp * p1_world;
+    glm::vec4 p2_clip = vp * p2_world;
+
+    // Perspective divide to get Normalized Device Coordinates
+    glm::vec3 p1_ndc = glm::vec3(p1_clip) / p1_clip.w;
+    glm::vec3 p2_ndc = glm::vec3(p2_clip) / p2_clip.w;
+
+    // Get the direction vector in NDC space and flip Y
+    glm::vec3 screenDir = p2_ndc - p1_ndc;
+    screenDir.y = -screenDir.y;
+
+    return screenDir;
+}
+
 
 void Camera::updateMatrices() {
     glm::vec3 front;
@@ -88,7 +107,6 @@ void Camera::updateMatrices() {
     m_ProjectionMatrix = glm::perspective(glm::radians(m_Zoom), m_AspectRatio, 0.1f, 100.0f);
 }
 
-// REFACTORED: Now returns true if a key was pressed, false otherwise.
 bool Camera::processKeyboard(float deltaTime) {
     float velocity = m_MovementSpeed * deltaTime;
     bool moved = false;
@@ -116,7 +134,6 @@ bool Camera::processKeyboard(float deltaTime) {
     return moved;
 }
 
-// REFACTORED: Now returns true, as any call to it means the mouse moved.
 bool Camera::processMouseMovement(float xoffset, float yoffset) {
     float sensitivity = 0.1f;
     xoffset *= sensitivity;
@@ -129,5 +146,5 @@ bool Camera::processMouseMovement(float xoffset, float yoffset) {
     if (m_Pitch < -89.0f) m_Pitch = -89.0f;
 
     updateMatrices();
-    return true; // If this function is called, it means the mouse moved.
+    return true;
 }
