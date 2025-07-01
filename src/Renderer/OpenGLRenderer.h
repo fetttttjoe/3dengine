@@ -1,37 +1,63 @@
-// =======================================================================
-// File: src/Renderer/OpenGLRenderer.h
-// =======================================================================
 #pragma once
-#include "Interfaces.h" // For IRenderer and ISceneObject
 
+#include <memory>
+#include <cstdint>
+#include "glm/glm.hpp"
+
+// Forward declarations
+class Scene;
+class Camera;
+class ISceneObject;
+class Shader;
 struct GLFWwindow;
-class Shader; // Forward declare Shader
 
-class OpenGLRenderer : public IRenderer {
+class OpenGLRenderer {
 public:
     OpenGLRenderer();
-    ~OpenGLRenderer() override;
+    ~OpenGLRenderer();
 
-    bool Initialize(void* windowHandle) override;
-    void BeginFrame() override;
-    void RenderScene(const Scene& scene, const Camera& camera) override;
-    void RenderUI() override;
-    void EndFrame() override;
-    void Shutdown() override;
-    uint32_t ProcessPicking(int x, int y, const Scene& scene, const Camera& camera) override;
-
-    // New: Implementation for the highlight rendering
-    void RenderHighlight(const ISceneObject& object, const Camera& camera) override;
+    bool Initialize(void* windowHandle);
+    void Shutdown();
+    
+    // NEW: Public method to handle window resizing
+    void OnWindowResize(int width, int height);
+    
+    void BeginFrame();
+    void EndFrame();
+    
+    void RenderStaticScene(const Scene& scene, const Camera& camera);
+    void DrawCachedStaticScene();
+    void RenderDynamicScene(const Scene& scene, const Camera& camera);
+    void RenderHighlight(const ISceneObject& object, const Camera& camera);
+    void RenderUI();
+    
+    uint32_t ProcessPicking(int x, int y, const Scene& scene, const Camera& camera);
 
 private:
     void createPickingFramebuffer();
+    void createStaticSceneCache();
+    void createFullscreenQuad();
+    
+    // NEW: Private helper to delete framebuffer resources before recreating them
+    void cleanupFramebuffers();
 
     GLFWwindow* m_Window = nullptr;
-    std::unique_ptr<Shader> m_PickingShader;
-    unsigned int m_PickingFBO = 0;
-    unsigned int m_PickingTexture = 0;
-    unsigned int m_DepthTexture = 0;
 
-    // New: Shader for drawing outlines/highlights
+    // --- Framebuffer Objects ---
+    uint32_t m_PickingFBO = 0;
+    uint32_t m_PickingTexture = 0;
+    
+    uint32_t m_StaticSceneFBO = 0;
+    uint32_t m_StaticSceneColorTexture = 0;
+    
+    // NOTE: This depth texture is shared by both FBOs
+    uint32_t m_DepthTexture = 0; 
+    
+    // --- Shaders ---
+    std::unique_ptr<Shader> m_PickingShader;
     std::unique_ptr<Shader> m_HighlightShader;
+    std::unique_ptr<Shader> m_BlitShader;
+    
+    // --- Geometry ---
+    uint32_t m_FullscreenQuadVAO = 0;
 };

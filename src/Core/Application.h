@@ -1,9 +1,8 @@
-// File: src/Core/Application.h
 #pragma once
 
 #include <memory>
-#include <GLFW/glfw3.h>
-#include <glm/glm.hpp> // <-- Add this line for glm::vec2 and other core types
+#include <functional>
+#include <glm/glm.hpp>
 
 // Forward declarations
 class OpenGLRenderer;
@@ -11,34 +10,44 @@ class Scene;
 class Camera;
 class UI;
 class SceneObjectFactory;
-class ISceneObject;
+struct GLFWwindow;
+
+enum class RenderingMode {
+    OnDemand,
+    Continuous
+};
 
 class Application {
 public:
-    Application();
+    Application(int initialWidth = 1280, int initialHeight = 720);
     ~Application();
-
     void Run();
+    void RequestRedraw();
 
 private:
     void Initialize();
     void Cleanup();
-    void processInput();
+    void RegisterObjectTypes();
+    void RunContinuous();
+    void RunOnDemand();
+    
+    // REMOVED: The RenderFrame helper is no longer used.
+    // void RenderFrame();
 
-    // GLFW Callbacks must be static to be set by glfwSet*Callback
+    void processKeyboardInput();
+    void processMouseInput();
+
+    // ... other members and callbacks remain the same ...
     static void error_callback(int error, const char* description);
     static void framebuffer_size_callback(GLFWwindow* window, int width, int height);
     static void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
-    static void mouse_button_callback(GLFWwindow* window, int button, int action, int mods);
-    // New: Mouse motion callback for drag and drop
     static void cursor_position_callback(GLFWwindow* window, double xpos, double ypos);
 
-
-    void RegisterObjectTypes();
-
-    int m_WindowWidth = 1280;
-    int m_WindowHeight = 720;
-    GLFWwindow* m_Window;
+    GLFWwindow* m_Window = nullptr;
+    int m_WindowWidth;
+    int m_WindowHeight;
+    float m_DeltaTime = 0.0f;
+    float m_LastFrame = 0.0f;
 
     std::unique_ptr<OpenGLRenderer> m_Renderer;
     std::unique_ptr<Scene> m_Scene;
@@ -46,12 +55,11 @@ private:
     std::unique_ptr<UI> m_UI;
     std::unique_ptr<SceneObjectFactory> m_ObjectFactory;
 
-    float m_DeltaTime = 0.0f;
-    float m_LastFrame = 0.0f;
-
-    // Drag and Drop state
     bool m_IsDraggingObject = false;
-    glm::vec2 m_LastMousePos = glm::vec2(0.0f);
-    // Keep track of the object being dragged
-    ISceneObject* m_DraggedObject = nullptr;
+    class ISceneObject* m_DraggedObject = nullptr;
+    glm::vec2 m_LastMousePos;
+    
+    RenderingMode m_RenderingMode = RenderingMode::OnDemand;
+    bool m_RedrawNeeded = true; 
+    bool m_StaticCacheDirty = true;
 };
