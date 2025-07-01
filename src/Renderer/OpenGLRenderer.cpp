@@ -5,6 +5,7 @@
 #include "Shader.h"
 #include "Interfaces.h"
 #include "Scene/Grid.h"
+#include "Scene/TransformGizmo.h" // Include the gizmo header
 #include "imgui_impl_opengl3.h"
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
@@ -31,29 +32,23 @@ bool OpenGLRenderer::Initialize(void* windowHandle) {
     return true;
 }
 
-// NEW: Helper function to clean up all framebuffer-related resources.
 void OpenGLRenderer::cleanupFramebuffers() {
     glDeleteFramebuffers(1, &m_PickingFBO);
     glDeleteTextures(1, &m_PickingTexture);
     glDeleteFramebuffers(1, &m_StaticSceneFBO);
     glDeleteTextures(1, &m_StaticSceneColorTexture);
-    glDeleteTextures(1, &m_DepthTexture); // Delete the shared depth texture
+    glDeleteTextures(1, &m_DepthTexture); 
 }
 
 void OpenGLRenderer::Shutdown() {
     Log::Debug("OpenGLRenderer shutdown.");
-    cleanupFramebuffers(); // Use the helper here
+    cleanupFramebuffers();
     glDeleteVertexArrays(1, &m_FullscreenQuadVAO);
 }
 
-// NEW: This function is called by the application when the window resizes.
 void OpenGLRenderer::OnWindowResize(int width, int height) {
     Log::Debug("Window resized, recreating framebuffers for new dimensions: ", width, "x", height);
-    
-    // First, delete the old framebuffer resources
     cleanupFramebuffers();
-    
-    // Then, create them again with the new window size
     createPickingFramebuffer();
     createStaticSceneCache();
 }
@@ -128,8 +123,30 @@ uint32_t OpenGLRenderer::ProcessPicking(int x, int y, const Scene& scene, const 
     return objectID;
 }
 
+// NEW: Implementation for the gizmo picking function
+uint32_t OpenGLRenderer::ProcessGizmoPicking(int x, int y, TransformGizmo& gizmo, const Camera& camera) {
+    glBindFramebuffer(GL_FRAMEBUFFER, m_PickingFBO);
+    // Clear only the color, not the depth, as the gizmo should always be "on top"
+    glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+    glClear(GL_COLOR_BUFFER_BIT);
+
+    // Use the main picking shader to draw the gizmo handles
+    gizmo.DrawForPicking(camera, *m_PickingShader);
+
+    glReadBuffer(GL_COLOR_ATTACHMENT0);
+    uint32_t objectID = 0;
+    int height;
+    glfwGetWindowSize(m_Window, nullptr, &height);
+    
+    // Read the pixel at the mouse cursor's location
+    glReadPixels(x, height - y, 1, 1, GL_RED_INTEGER, GL_UNSIGNED_INT, &objectID);
+    
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    // Log::Debug("Gizmo Picking processed. Clicked on ID: ", objectID);
+    return objectID;
+}
+
 void OpenGLRenderer::RenderHighlight(const ISceneObject &object, const Camera &camera) {
-    Log::Debug("Rendering wireframe highlight for object '", object.name, "' (ID: ", object.id, ")");
     glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
     glLineWidth(2.0f);
     m_HighlightShader->Bind();

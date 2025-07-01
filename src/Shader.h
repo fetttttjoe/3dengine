@@ -9,6 +9,8 @@
 class Shader {
 public:
     Shader(const std::string& vertexPath, const std::string& fragmentPath);
+    Shader(const char* vertexSource, const char* fragmentSource, bool fromMemory); 
+
     ~Shader();
 
     void Bind()   const;
