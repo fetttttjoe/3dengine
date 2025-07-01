@@ -5,7 +5,7 @@
 #include "Renderer/OpenGLRenderer.h"
 #include "Scene/Scene.h"
 #include "Core/Camera.h"
-#include "Core/UI.h"
+#include "Core/UI/UI.h"
 #include "Factories/SceneObjectFactory.h" //
 #include "Scene/Objects/Triangle.h"
 #include "Scene/Objects/Pyramid.h"

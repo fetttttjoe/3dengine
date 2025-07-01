@@ -1,38 +1,36 @@
-// =======================================================================
-// File: src/Scene/Scene.h
-// =======================================================================
 #pragma once
 #include <vector>
 #include <memory>
-#include <cstdint> // For uint32_t
+#include <string>
+#include <cstdint>
 
-class ISceneObject; // Forward declaration
-class SceneObjectFactory; // FIX: Forward declare SceneObjectFactory
+// Forward declarations
+class ISceneObject;
+class SceneObjectFactory;
 
 class Scene {
 public:
-    // FIX: Add SceneObjectFactory* parameter to constructor
-    Scene(SceneObjectFactory* factory = nullptr);
+    Scene(SceneObjectFactory* factory);
     ~Scene();
 
     void AddObject(std::unique_ptr<ISceneObject> object);
     const std::vector<std::unique_ptr<ISceneObject>>& GetSceneObjects() const;
 
     ISceneObject* GetObjectByID(uint32_t id);
-
-    void SelectNextObject();
-    void SetSelectedObjectByID(uint32_t id);
-    void DeleteSelectedObject();
-    void DeleteObjectByID(uint32_t id);
-    void DuplicateObject(uint32_t id); // This method uses the factory
-
     ISceneObject* GetSelectedObject();
 
+    void SetSelectedObjectByID(uint32_t id);
+    void SelectNextObject();
+    void DeleteSelectedObject();
+    void DeleteObjectByID(uint32_t id);
+    void DuplicateObject(uint32_t id);
+
 private:
+    // Helper function to find the next available number for a duplicated object's name.
+    int GetNextAvailableIndexForName(const std::string& baseName);
+
     std::vector<std::unique_ptr<ISceneObject>> m_Objects;
     int m_SelectedIndex = -1;
     uint32_t m_NextObjectID = 1;
-
-    // FIX: Add member to store the SceneObjectFactory
     SceneObjectFactory* m_ObjectFactory = nullptr;
 };
