@@ -1,136 +1,133 @@
-// =======================================================================
-// File: src/Core/Camera.cpp
-// =======================================================================
 #include "Core/Camera.h"
-#include <glm/gtc/matrix_transform.hpp> // For glm::lookAt, glm::perspective
-#include <GLFW/glfw3.h>                 // For GLFW functions (get cursor pos, get window size)
-#include <iostream>                     // For potential debug output
+#include <glm/gtc/matrix_transform.hpp>
+#include <GLFW/glfw3.h>
+#include <iostream>
 
+// Constructor remains the same
 Camera::Camera(GLFWwindow* window, glm::vec3 position) :
     m_Window(window),
     m_Position(position),
     m_WorldUp(0.0f, 1.0f, 0.0f),
-    m_Yaw(-90.0f),      // Initial yaw (looking along -Z axis by default)
-    m_Pitch(-10.0f),    // Initial pitch (slightly looking down)
-    m_Zoom(45.0f),      // Initial Field of View
-    m_MovementSpeed(5.0f), // Initial movement speed
-    m_AspectRatio(16.0f / 9.0f) // Default aspect ratio, will be updated by SetAspectRatio
+    m_Yaw(-90.0f),
+    m_Pitch(-10.0f),
+    m_Zoom(45.0f),
+    m_MovementSpeed(5.0f),
+    m_AspectRatio(16.0f / 9.0f)
 {
-    // Get initial mouse position
     double xpos, ypos;
     glfwGetCursorPos(m_Window, &xpos, &ypos);
     m_LastX = (float)xpos;
     m_LastY = (float)ypos;
-
-    // Get initial window size to set correct aspect ratio for projection matrix
     int width, height;
     glfwGetWindowSize(m_Window, &width, &height);
     if (height > 0) {
         m_AspectRatio = (float)width / (float)height;
     }
-
-    updateMatrices(); // Call the updated method to set up both view and projection
+    updateMatrices();
 }
 
-void Camera::HandleInput(float deltaTime) {
-    processKeyboard(deltaTime);
+// REFACTORED: Main input handler now calls the callback if a change occurs.
+void Camera::HandleInput(float deltaTime, std::function<void()> onUpdateCallback) {
+    bool keyboardMoved = processKeyboard(deltaTime);
+    bool mouseMoved = false;
 
-    // Only process mouse movement for orbiting if right mouse button is pressed
     if (glfwGetMouseButton(m_Window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS) {
-        // If this is the start of an orbit session, reset m_FirstMouse
         if (!m_IsOrbiting) {
             m_IsOrbiting = true;
-            m_FirstMouse = true; // Reset first mouse flag when orbiting starts
+            m_FirstMouse = true;
         }
         double xpos, ypos;
         glfwGetCursorPos(m_Window, &xpos, &ypos);
-
-        // On the very first mouse movement after starting orbit,
-        // set last X/Y to current position to prevent a jump
         if (m_FirstMouse) {
             m_LastX = (float)xpos;
             m_LastY = (float)ypos;
             m_FirstMouse = false;
         }
-
-        // Calculate offset from last frame's position
         float xoffset = (float)xpos - m_LastX;
-        float yoffset = m_LastY - (float)ypos; // Inverted for typical Y-axis movement
-
-        // Update last mouse position
+        float yoffset = m_LastY - (float)ypos;
         m_LastX = (float)xpos;
         m_LastY = (float)ypos;
 
-        processMouseMovement(xoffset, yoffset);
+        // Only consider it "moved" if there was a non-zero offset
+        if (xoffset != 0.0f || yoffset != 0.0f) {
+            mouseMoved = processMouseMovement(xoffset, yoffset);
+        }
     } else {
-        m_IsOrbiting = false; // Reset orbiting flag when right mouse button is released
+        m_IsOrbiting = false;
+    }
+    
+    // If either input method changed the camera, trigger the callback.
+    if ((keyboardMoved || mouseMoved) && onUpdateCallback) {
+        onUpdateCallback();
     }
 }
 
+// NOTE: No changes needed here. The Application's scroll_callback handles
+// requesting the redraw after calling this function.
 void Camera::ProcessMouseScroll(float yoffset) {
-    // Adjust camera position along its front vector for zooming
-    // 'yoffset' typically positive for scrolling up (zoom in), negative for scrolling down (zoom out)
-    m_Position += m_Front * yoffset * 0.5f; // Adjust 0.5f for desired zoom speed
-    updateMatrices(); // Update view matrix after position change
+    m_Position += m_Front * yoffset * 0.5f;
+    updateMatrices();
 }
 
-// NEW: Method to set the camera's aspect ratio
 void Camera::SetAspectRatio(float aspectRatio) {
-    if (m_AspectRatio != aspectRatio) { // Only update if aspect ratio has actually changed
+    if (m_AspectRatio != aspectRatio) {
         m_AspectRatio = aspectRatio;
-        updateMatrices(); // Recompute projection matrix
+        updateMatrices();
     }
 }
 
-// Consolidated method to update both view and projection matrices
 void Camera::updateMatrices() {
-    // Calculate the new Front vector from Euler angles
     glm::vec3 front;
     front.x = cos(glm::radians(m_Yaw)) * cos(glm::radians(m_Pitch));
     front.y = sin(glm::radians(m_Pitch));
     front.z = sin(glm::radians(m_Yaw)) * cos(glm::radians(m_Pitch));
     m_Front = glm::normalize(front);
-
-    // Also re-calculate the Right and Up vector
-    m_Right = glm::normalize(glm::cross(m_Front, m_WorldUp)); // Normalize vectors, because their length gets closer to 0 the more you look up or down.
+    m_Right = glm::normalize(glm::cross(m_Front, m_WorldUp));
     m_Up = glm::normalize(glm::cross(m_Right, m_Front));
-
-    // Calculate the View Matrix (camera's inverse transform)
     m_ViewMatrix = glm::lookAt(m_Position, m_Position + m_Front, m_Up);
-
-    // Calculate the Projection Matrix (perspective projection)
-    // The aspect ratio now comes from the stored m_AspectRatio
     m_ProjectionMatrix = glm::perspective(glm::radians(m_Zoom), m_AspectRatio, 0.1f, 100.0f);
 }
 
-void Camera::processKeyboard(float deltaTime) {
+// REFACTORED: Now returns true if a key was pressed, false otherwise.
+bool Camera::processKeyboard(float deltaTime) {
     float velocity = m_MovementSpeed * deltaTime;
-    // Move forward/backward relative to camera's front direction
-    if (glfwGetKey(m_Window, GLFW_KEY_W) == GLFW_PRESS)
-        m_Position += m_Front * velocity;
-    if (glfwGetKey(m_Window, GLFW_KEY_S) == GLFW_PRESS)
-        m_Position -= m_Front * velocity;
-    // Move left/right relative to camera's right direction (strafe)
-    if (glfwGetKey(m_Window, GLFW_KEY_A) == GLFW_PRESS)
-        m_Position -= m_Right * velocity;
-    if (glfwGetKey(m_Window, GLFW_KEY_D) == GLFW_PRESS)
-        m_Position += m_Right * velocity;
+    bool moved = false;
 
-    updateMatrices(); // Update view matrix after position change
+    if (glfwGetKey(m_Window, GLFW_KEY_W) == GLFW_PRESS) {
+        m_Position += m_Front * velocity;
+        moved = true;
+    }
+    if (glfwGetKey(m_Window, GLFW_KEY_S) == GLFW_PRESS) {
+        m_Position -= m_Front * velocity;
+        moved = true;
+    }
+    if (glfwGetKey(m_Window, GLFW_KEY_A) == GLFW_PRESS) {
+        m_Position -= m_Right * velocity;
+        moved = true;
+    }
+    if (glfwGetKey(m_Window, GLFW_KEY_D) == GLFW_PRESS) {
+        m_Position += m_Right * velocity;
+        moved = true;
+    }
+    
+    if (moved) {
+        updateMatrices();
+    }
+    return moved;
 }
 
-void Camera::processMouseMovement(float xoffset, float yoffset) {
-    float sensitivity = 0.1f; // Mouse sensitivity for rotation
+// REFACTORED: Now returns true, as any call to it means the mouse moved.
+bool Camera::processMouseMovement(float xoffset, float yoffset) {
+    float sensitivity = 0.1f;
     xoffset *= sensitivity;
     yoffset *= sensitivity;
 
-    // Apply offsets to Yaw and Pitch
     m_Yaw += xoffset;
     m_Pitch += yoffset;
 
-    // Constrain Pitch to avoid flipping the camera
     if (m_Pitch > 89.0f) m_Pitch = 89.0f;
     if (m_Pitch < -89.0f) m_Pitch = -89.0f;
 
-    updateMatrices(); // Update view matrix after rotation change
+    updateMatrices();
+    return true; // If this function is called, it means the mouse moved.
 }
