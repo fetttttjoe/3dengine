@@ -106,6 +106,3 @@ void Pyramid::DrawHighlight(const glm::mat4& view, const glm::mat4& projection) 
     glDrawElements(GL_TRIANGLES, 18, GL_UNSIGNED_INT, 0);
     glBindVertexArray(0);
 }
-
-// FIX: Removed the redefinition of GetTypeString() from here
-// It is now only defined inline in Pyramid.h

@@ -50,8 +50,7 @@ target_include_directories(IntuitiveModeler PRIVATE
 target_compile_definitions(IntuitiveModeler PRIVATE GLM_ENABLE_EXPERIMENTAL)
 
 # --- Linking ---
-target_link_libraries(IntuitiveModeler PRIVATE glfw glad glm OpenGL::GL)
-
+target_link_libraries(IntuitiveModeler PRIVATE glfw glad glm OpenGL::GL stdc++fs)
 # --- Output and Platform Settings ---
 set_target_properties(IntuitiveModeler PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
 if(WIN32)

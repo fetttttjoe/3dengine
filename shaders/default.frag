@@ -1,9 +1,11 @@
 #version 330 core
-layout (location = 0) out uint o_ObjectID;
+out vec4 FragColor;
 
-uniform uint u_ObjectID;
+// This line receives the color from your C++ code
+uniform vec4 u_Color;
 
 void main()
 {
-    o_ObjectID = u_ObjectID;
+    // Sets the pixel's color to the value passed in
+    FragColor = u_Color;
 }

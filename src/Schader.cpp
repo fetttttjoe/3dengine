@@ -5,15 +5,18 @@
 #include <vector>
 #include <glm/gtc/type_ptr.hpp>
 #include <glad/glad.h>
+
 Shader::Shader(const std::string &vp, const std::string &fp)
 {
     m_RendererID = createShaderProgram(loadShaderSource(vp), loadShaderSource(fp));
 }
+
 Shader::~Shader()
 {
     if (m_RendererID != 0)
         glDeleteProgram(m_RendererID);
 }
+
 void Shader::Bind() const { glUseProgram(m_RendererID); }
 void Shader::Unbind() const { glUseProgram(0); }
 
@@ -23,10 +26,16 @@ void Shader::SetUniform1ui(const std::string &name, uint32_t value)
     glUniform1ui(getUniformLocation(name), value);
 }
 
+// Re-added SetUniform3f function
+void Shader::SetUniform3f(const std::string &name, float v0, float v1, float v2) {
+    glUniform3f(getUniformLocation(name), v0, v1, v2);
+}
+
 void Shader::SetUniform1i(const std::string &name, int value) { glUniform1i(getUniformLocation(name), value); }
 void Shader::SetUniform1f(const std::string &name, float value) { glUniform1f(getUniformLocation(name), value); }
 void Shader::SetUniform4f(const std::string &name, float v0, float v1, float v2, float v3) { glUniform4f(getUniformLocation(name), v0, v1, v2, v3); }
 void Shader::SetUniformMat4f(const std::string &name, const glm::mat4 &matrix) { glUniformMatrix4fv(getUniformLocation(name), 1, GL_FALSE, glm::value_ptr(matrix)); }
+
 int Shader::getUniformLocation(const std::string &name)
 {
     if (m_UniformLocationCache.count(name))
@@ -37,11 +46,14 @@ int Shader::getUniformLocation(const std::string &name)
     m_UniformLocationCache[name] = loc;
     return loc;
 }
+
 std::string Shader::loadShaderSource(const std::string &p)
 {
     std::ifstream f(p);
     if (!f.is_open())
     {
+        // Add this error message!
+        std::cerr << "ERROR: Could not open shader file: " << p << std::endl;
         return "";
     }
     std::stringstream b;
@@ -68,6 +80,7 @@ unsigned int Shader::compileShader(unsigned int t, const std::string &s)
     }
     return id;
 }
+
 unsigned int Shader::createShaderProgram(const std::string &vs, const std::string &fs)
 {
     unsigned int p = glCreateProgram();

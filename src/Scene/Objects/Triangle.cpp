@@ -66,4 +66,3 @@ void Triangle::DrawHighlight(const glm::mat4& view, const glm::mat4& projection)
     glBindVertexArray(0);
 }
 
-// GetTypeString() is defined inline in Triangle.h, so no redefinition here.

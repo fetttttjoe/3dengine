@@ -17,7 +17,12 @@ bool OpenGLRenderer::Initialize(void* windowHandle) {
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     
+    // FIX: Load the correct PICKING shaders for the picking system.
     m_PickingShader = std::make_unique<Shader>("shaders/picking.vert", "shaders/picking.frag");
+
+    // FIX: Load the correct HIGHLIGHT shaders for the highlighting system.
+    m_HighlightShader = std::make_unique<Shader>("shaders/highlight.vert", "shaders/highlight.frag");
+    
     createPickingFramebuffer();
     
     return true;
@@ -30,7 +35,7 @@ void OpenGLRenderer::createPickingFramebuffer() {
     glGenFramebuffers(1, &m_PickingFBO);
     glBindFramebuffer(GL_FRAMEBUFFER, m_PickingFBO);
 
-    // THE FIX: Use a texture format that can store integer IDs, not colors.
+    // This texture is configured to store single integer IDs.
     glGenTextures(1, &m_PickingTexture);
     glBindTexture(GL_TEXTURE_2D, m_PickingTexture);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_R32UI, width, height, 0, GL_RED_INTEGER, GL_UNSIGNED_INT, NULL);
@@ -49,6 +54,7 @@ void OpenGLRenderer::createPickingFramebuffer() {
 
 uint32_t OpenGLRenderer::ProcessPicking(int x, int y, const Scene& scene, const Camera& camera) {
     glBindFramebuffer(GL_FRAMEBUFFER, m_PickingFBO);
+    
     // Clear with 0, as it represents "no object"
     glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -64,7 +70,8 @@ uint32_t OpenGLRenderer::ProcessPicking(int x, int y, const Scene& scene, const 
     uint32_t objectID = 0;
     int height;
     glfwGetWindowSize(m_Window, nullptr, &height);
-    // THE FIX: Read the pixel as an unsigned integer ID.
+    
+    // This function reads the integer ID from the framebuffer.
     glReadPixels(x, height - y, 1, 1, GL_RED_INTEGER, GL_UNSIGNED_INT, &objectID);
     glReadBuffer(GL_NONE);
 
@@ -97,13 +104,26 @@ void OpenGLRenderer::EndFrame() {
 
 void OpenGLRenderer::RenderHighlight(const ISceneObject &object, const Camera &camera)
 {
-    // You could use a stencil buffer technique for outlines, or a simple pass
-    // that draws the object with a larger scale and specific color.
+    // Bind the special shader used for highlighting
+    m_HighlightShader->Bind();
 
-    // Simple highlight (draw scaled object with a color)
-    // This assumes the object's DrawHighlight method uses the m_HighlightShader
-    // and its own vertex data.
+    // Set its uniforms
+    m_HighlightShader->SetUniformMat4f("u_Model", object.transform); // Use the object's transform
+    m_HighlightShader->SetUniformMat4f("u_View", camera.GetViewMatrix());
+    m_HighlightShader->SetUniformMat4f("u_Projection", camera.GetProjectionMatrix());
+    
+    // Set a bright, noticeable color for the highlight
+    m_HighlightShader->SetUniform4f("u_Color", 1.0f, 1.0f, 0.0f, 1.0f); // Bright Yellow
+
+    // Now, tell the object to draw its mesh. It will be drawn using the
+    // currently bound highlight shader.
     object.DrawHighlight(camera.GetViewMatrix(), camera.GetProjectionMatrix());
+
+    // Unbind the shader to be safe
+    m_HighlightShader->Unbind();
 }
 
-void OpenGLRenderer::Shutdown() {}
+void OpenGLRenderer::Shutdown() {
+    // FIX: Added a shutdown message as requested.
+    std::cout << "OpenGLRenderer shutdown." << std::endl;
+}
