@@ -1,23 +1,30 @@
+// Core/UI/UI.h
 #pragma once
 
-// Forward-declarations
+#include <string>
+
+// Forward declarations
 class Scene;
 class SceneObjectFactory;
 struct GLFWwindow;
 
 class UI {
 public:
-    UI(Scene* scene);
+    explicit UI(Scene* scene);
     ~UI();
 
+    // Call once on startup
     void Initialize(GLFWwindow* window);
+    // Call once before shutdown
     void Shutdown();
-    
+
+    // Per-frame ImGui calls
     void BeginFrame();
     void EndFrame();
 
-    // This is now the single public entry point for drawing.
+    // Draw all UI (menus, panels, etc.)
     void DrawUI();
+    // Provide the factory so UI can add new objects
     void SetObjectFactory(SceneObjectFactory* factory);
 
 private:
@@ -25,6 +32,10 @@ private:
     void DrawSceneOutliner();
     void DrawPropertiesPanel();
 
-    Scene* m_Scene;
+    Scene*              m_Scene;
     SceneObjectFactory* m_Factory;
+
+    // For inline renaming in the outliner
+    uint32_t            m_RenameID = 0;
+    std::string         m_RenameBuffer;
 };
