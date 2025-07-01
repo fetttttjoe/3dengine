@@ -1,22 +1,16 @@
+// Scene/Objects/Triangle.h
 #pragma once
-#include "Interfaces.h"
-#include <vector>
-#include <memory>
 
-class Shader;
+#include "BaseObject.h"
 
-class Triangle : public ISceneObject {
+class Triangle : public BaseObject {
 public:
     Triangle();
-    ~Triangle() override;
-    void Draw(const glm::mat4& view, const glm::mat4& projection) override;
-    void DrawForPicking(Shader& pickingShader, const glm::mat4& view, const glm::mat4& projection) override;
-    void DrawHighlight(const glm::mat4& view, const glm::mat4& projection) const override; // NEW
+    ~Triangle() override = default;
 
-    std::string GetTypeString() const override { return "Triangle"; } // Already inline defined
+    std::string GetTypeString() const override { return m_TypeString; }
 
-private:
-    unsigned int m_VAO, m_VBO;
-    std::unique_ptr<Shader> m_Shader;
-    int m_VertexCount;
+protected:
+    void BuildMeshData(std::vector<float>& vertices,
+                       std::vector<unsigned int>& indices) override;
 };

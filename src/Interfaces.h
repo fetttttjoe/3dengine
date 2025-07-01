@@ -36,7 +36,21 @@ struct ObjectProperty {
     std::string name;
     float* value;
 };
+// in Interfaces.h
+class IScalable {
+public:
+  enum Axis : uint8_t { X_POS, X_NEG, Y_POS, Y_NEG, Z_POS, Z_NEG };
+  virtual ~IScalable() = default;
 
+  // called once when you start dragging a handle
+  virtual void BeginScaling(Axis axis, const glm::vec3& worldAnchor) = 0;
+
+  // called every mouse‐move while dragging
+  virtual void UpdateScaling(const glm::vec3& worldCurrent) = 0;
+
+  // gives you six world‐space positions for the handles
+  virtual std::array<glm::vec3,6> GetHandlePositions() const = 0;
+};
 class ISceneObject {
 public:
     ISceneObject() : id(0), transform(1.0f), name("Unnamed Object"), isSelected(false) {}
