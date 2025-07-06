@@ -1,39 +1,37 @@
 #include "Core/Application.h"
-#include "Core/ResourceManager.h" 
-#include "Renderer/OpenGLRenderer.h"
-#include "Scene/Scene.h"
-#include "Core/Camera.h"
-#include "Core/UI/UI.h"
-#include "Factories/SceneObjectFactory.h"
-#include "Scene/Objects/Triangle.h"
-#include "Scene/Objects/Pyramid.h"
-#include "Scene/Grid.h"
-#include "Interfaces.h"
-#include "Scene/TransformGizmo.h"
-#include <iostream>
-#include <stdexcept>
+#define GLFW_INCLUDE_NONE
+
 #include <GLFW/glfw3.h>
-#include "imgui.h"
-#include <glm/gtx/matrix_decompose.hpp>
+
 #include <glm/gtc/matrix_inverse.hpp>
 #include <glm/gtc/type_ptr.hpp>
+#include <glm/gtx/matrix_decompose.hpp>
+#include <iostream>
+#include <stdexcept>
+
+#include "Core/Camera.h"
+#include "Core/ResourceManager.h"
+#include "Core/UI/UI.h"
+#include "Factories/SceneObjectFactory.h"
+#include "Interfaces.h"
+#include "Renderer/OpenGLRenderer.h"
+#include "Scene/Grid.h"
+#include "Scene/Objects/Pyramid.h"
+#include "Scene/Objects/Triangle.h"
+#include "Scene/Scene.h"
+#include "Scene/TransformGizmo.h"
+#include "imgui.h"
 
 Application::Application(int initialWidth, int initialHeight)
-    : m_WindowWidth(initialWidth), m_WindowHeight(initialHeight)
-{
+    : m_WindowWidth(initialWidth), m_WindowHeight(initialHeight) {
   Initialize();
 }
 
-Application::~Application()
-{
-  Cleanup();
-}
+Application::~Application() { Cleanup(); }
 
-void Application::Initialize()
-{
+void Application::Initialize() {
   glfwSetErrorCallback(error_callback);
-  if (!glfwInit())
-  {
+  if (!glfwInit()) {
     throw std::runtime_error("Failed to initialize GLFW");
   }
 
@@ -44,9 +42,9 @@ void Application::Initialize()
   glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
 #endif
 
-  m_Window = glfwCreateWindow(m_WindowWidth, m_WindowHeight, "Intuitive Modeler v2.0", NULL, NULL);
-  if (!m_Window)
-  {
+  m_Window = glfwCreateWindow(m_WindowWidth, m_WindowHeight,
+                              "Intuitive Modeler v2.0", NULL, NULL);
+  if (!m_Window) {
     glfwTerminate();
     throw std::runtime_error("Failed to create GLFW window");
   }
@@ -61,8 +59,7 @@ void Application::Initialize()
   ResourceManager::Initialize();
 
   m_Renderer = std::make_unique<OpenGLRenderer>();
-  if (!m_Renderer->Initialize(m_Window))
-  {
+  if (!m_Renderer->Initialize(m_Window)) {
     throw std::runtime_error("Failed to initialize Renderer");
   }
 
@@ -72,7 +69,7 @@ void Application::Initialize()
   m_Scene = std::make_unique<Scene>(m_ObjectFactory.get());
   m_Camera = std::make_unique<Camera>(m_Window);
   m_UI = std::make_unique<UI>(m_Scene.get());
-  m_TransformGizmo = std::make_unique<TransformGizmo>(); 
+  m_TransformGizmo = std::make_unique<TransformGizmo>();
   m_UI->Initialize(m_Window);
 
   m_UI->SetObjectFactory(m_ObjectFactory.get());
@@ -82,20 +79,16 @@ void Application::Initialize()
   m_Scene->AddObject(m_ObjectFactory->Create("Triangle"));
 }
 
-void Application::RegisterObjectTypes()
-{
-  m_ObjectFactory->Register("Grid", []()
-                            { return std::make_unique<Grid>(); });
-  m_ObjectFactory->Register("Triangle", []()
-                            { return std::make_unique<Triangle>(); });
-  m_ObjectFactory->Register("Pyramid", []()
-                            { return std::make_unique<Pyramid>(); });
+void Application::RegisterObjectTypes() {
+  m_ObjectFactory->Register("Grid", []() { return std::make_unique<Grid>(); });
+  m_ObjectFactory->Register("Triangle",
+                            []() { return std::make_unique<Triangle>(); });
+  m_ObjectFactory->Register("Pyramid",
+                            []() { return std::make_unique<Pyramid>(); });
 }
 
-void Application::Run()
-{
-  while (!glfwWindowShouldClose(m_Window))
-  {
+void Application::Run() {
+  while (!glfwWindowShouldClose(m_Window)) {
     glfwPollEvents();
 
     float currentFrame = (float)glfwGetTime();
@@ -106,11 +99,9 @@ void Application::Run()
 
     processKeyboardInput();
     processMouseInput();
-    m_Camera->HandleInput(m_DeltaTime, [this]()
-                          { m_StaticCacheDirty = true; });
+    m_Camera->HandleInput(m_DeltaTime, [this]() { m_StaticCacheDirty = true; });
 
-    if (m_StaticCacheDirty)
-    {
+    if (m_StaticCacheDirty) {
       m_Renderer->RenderStaticScene(*m_Scene, *m_Camera);
       m_StaticCacheDirty = false;
     }
@@ -120,8 +111,7 @@ void Application::Run()
     m_Renderer->RenderDynamicScene(*m_Scene, *m_Camera);
 
     ISceneObject *selectedObject = m_Scene->GetSelectedObject();
-    if (selectedObject)
-    {
+    if (selectedObject) {
       m_Renderer->RenderHighlight(*selectedObject, *m_Camera);
       m_TransformGizmo->Draw(*m_Camera);
     }
@@ -134,41 +124,34 @@ void Application::Run()
   }
 }
 
-void Application::Cleanup()
-{
+void Application::Cleanup() {
   m_UI->Shutdown();
   m_Renderer->Shutdown();
   ResourceManager::Shutdown();
-  if (m_Window)
-  {
+  if (m_Window) {
     glfwDestroyWindow(m_Window);
   }
   glfwTerminate();
 }
 
-void Application::processKeyboardInput()
-{
+void Application::processKeyboardInput() {
   if (glfwGetKey(m_Window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
     glfwSetWindowShouldClose(m_Window, true);
 
   static bool deletePressed = false;
-  if (glfwGetKey(m_Window, GLFW_KEY_DELETE) == GLFW_PRESS && !deletePressed)
-  {
+  if (glfwGetKey(m_Window, GLFW_KEY_DELETE) == GLFW_PRESS && !deletePressed) {
     m_Scene->DeleteSelectedObject();
-    m_TransformGizmo->SetTarget(nullptr); // Deselect from gizmo too
+    m_TransformGizmo->SetTarget(nullptr);  // Deselect from gizmo too
     deletePressed = true;
   }
-  if (glfwGetKey(m_Window, GLFW_KEY_DELETE) == GLFW_RELEASE)
-  {
+  if (glfwGetKey(m_Window, GLFW_KEY_DELETE) == GLFW_RELEASE) {
     deletePressed = false;
   }
 }
 
-void Application::processMouseInput()
-{
+void Application::processMouseInput() {
   ImGuiIO &io = ImGui::GetIO();
-  if (io.WantCaptureMouse)
-  {
+  if (io.WantCaptureMouse) {
     m_IsDraggingObject = false;
     m_IsDraggingGizmo = false;
     m_DraggedObject = nullptr;
@@ -176,46 +159,46 @@ void Application::processMouseInput()
     return;
   }
 
-  if (ImGui::IsMouseClicked(ImGuiMouseButton_Left))
-  {
+  if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
     double xpos, ypos;
     glfwGetCursorPos(m_Window, &xpos, &ypos);
     m_LastMousePos = glm::vec2((float)xpos, (float)ypos);
 
     // --- GIZMO PICKING PASS ---
-    uint32_t gizmoID = m_Renderer->ProcessGizmoPicking((int)xpos, (int)ypos, *m_TransformGizmo, *m_Camera);
-    if (TransformGizmo::IsGizmoID(gizmoID))
-    {
+    uint32_t gizmoID = m_Renderer->ProcessGizmoPicking(
+        (int)xpos, (int)ypos, *m_TransformGizmo, *m_Camera);
+    if (TransformGizmo::IsGizmoID(gizmoID)) {
       m_IsDraggingGizmo = true;
       m_TransformGizmo->SetActiveHandle(gizmoID);
-      return; 
+      return;
     }
 
     // --- OBJECT PICKING PASS ---
-    uint32_t objectID = m_Renderer->ProcessPicking((int)xpos, (int)ypos, *m_Scene, *m_Camera);
+    uint32_t objectID =
+        m_Renderer->ProcessPicking((int)xpos, (int)ypos, *m_Scene, *m_Camera);
     ISceneObject *lastSelected = m_Scene->GetSelectedObject();
     m_Scene->SetSelectedObjectByID(objectID);
     ISceneObject *currentSelected = m_Scene->GetSelectedObject();
 
-    if (lastSelected != currentSelected)
-    {
+    if (lastSelected != currentSelected) {
       m_TransformGizmo->SetTarget(currentSelected);
     }
 
-    if (currentSelected && currentSelected->isSelectable)
-    {
+    if (currentSelected && currentSelected->isSelectable) {
       m_IsDraggingObject = true;
       m_DraggedObject = currentSelected;
 
       // FIX: Calculate the object's depth in NDC space and store it.
       // This ensures we move the object on a plane parallel to the screen,
       // preventing it from jumping towards the camera.
-      glm::mat4 viewProjection = m_Camera->GetProjectionMatrix() * m_Camera->GetViewMatrix();
-      glm::vec4 clipPos = viewProjection * glm::vec4(m_DraggedObject->GetPosition(), 1.0f);
+      glm::mat4 viewProjection =
+          m_Camera->GetProjectionMatrix() * m_Camera->GetViewMatrix();
+      glm::vec4 clipPos =
+          viewProjection * glm::vec4(m_DraggedObject->GetPosition(), 1.0f);
       if (clipPos.w != 0.0f) {
-          m_DragNDCDepth = clipPos.z / clipPos.w;
+        m_DragNDCDepth = clipPos.z / clipPos.w;
       } else {
-          m_DragNDCDepth = 0.0f; // Fallback
+        m_DragNDCDepth = 0.0f;  // Fallback
       }
 
     } else {
@@ -224,8 +207,7 @@ void Application::processMouseInput()
     }
   }
 
-  if (ImGui::IsMouseReleased(ImGuiMouseButton_Left))
-  {
+  if (ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
     m_IsDraggingObject = false;
     m_IsDraggingGizmo = false;
     m_DraggedObject = nullptr;
@@ -233,9 +215,10 @@ void Application::processMouseInput()
   }
 }
 
-void Application::cursor_position_callback(GLFWwindow *window, double xpos, double ypos)
-{
-  Application *app = static_cast<Application *>(glfwGetWindowUserPointer(window));
+void Application::cursor_position_callback(GLFWwindow *window, double xpos,
+                                           double ypos) {
+  Application *app =
+      static_cast<Application *>(glfwGetWindowUserPointer(window));
   if (!app) return;
 
   glm::vec2 currentMousePos((float)xpos, (float)ypos);
@@ -246,44 +229,43 @@ void Application::cursor_position_callback(GLFWwindow *window, double xpos, doub
   if (io.WantCaptureMouse) return;
 
   // --- GIZMO DRAGGING LOGIC ---
-  if (app->m_IsDraggingGizmo)
-  {
-    app->m_TransformGizmo->Update(*app->m_Camera, mouseDelta, true, app->m_WindowWidth, app->m_WindowHeight);
+  if (app->m_IsDraggingGizmo) {
+    app->m_TransformGizmo->Update(*app->m_Camera, mouseDelta, true,
+                                  app->m_WindowWidth, app->m_WindowHeight);
   }
   // --- OBJECT DRAGGING LOGIC ---
-  else if (app->m_IsDraggingObject && app->m_DraggedObject)
-  {
+  else if (app->m_IsDraggingObject && app->m_DraggedObject) {
     // FIX: Use the constant NDC depth calculated when the drag started.
-    // This correctly unprojects the mouse cursor onto the plane the object was on,
-    // resulting in smooth, intuitive movement.
-    glm::vec3 newWorldPos = app->m_Camera->ScreenToWorldPoint(currentMousePos, app->m_DragNDCDepth, app->m_WindowWidth, app->m_WindowHeight);
-    
+    // This correctly unprojects the mouse cursor onto the plane the object was
+    // on, resulting in smooth, intuitive movement.
+    glm::vec3 newWorldPos = app->m_Camera->ScreenToWorldPoint(
+        currentMousePos, app->m_DragNDCDepth, app->m_WindowWidth,
+        app->m_WindowHeight);
+
     app->m_DraggedObject->SetPosition(newWorldPos);
-  }
-  else if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS || glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_MIDDLE) == GLFW_PRESS)
-  {
+  } else if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) ==
+                 GLFW_PRESS ||
+             glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_MIDDLE) ==
+                 GLFW_PRESS) {
     app->m_StaticCacheDirty = true;
   }
 }
 
-void Application::error_callback(int error, const char *description)
-{
+void Application::error_callback(int error, const char *description) {
   std::cerr << "GLFW Error [" << error << "]: " << description << std::endl;
 }
 
-void Application::framebuffer_size_callback(GLFWwindow *window, int width, int height)
-{
-  Application *app = static_cast<Application *>(glfwGetWindowUserPointer(window));
-  if (app)
-  {
+void Application::framebuffer_size_callback(GLFWwindow *window, int width,
+                                            int height) {
+  Application *app =
+      static_cast<Application *>(glfwGetWindowUserPointer(window));
+  if (app) {
     app->m_WindowWidth = width;
     app->m_WindowHeight = height;
-    if (app->m_Camera)
-    {
+    if (app->m_Camera) {
       app->m_Camera->SetAspectRatio((float)width / (height > 0 ? height : 1));
     }
-    if (app->m_Renderer)
-    {
+    if (app->m_Renderer) {
       app->m_Renderer->OnWindowResize(width, height);
     }
     app->m_StaticCacheDirty = true;
@@ -291,12 +273,12 @@ void Application::framebuffer_size_callback(GLFWwindow *window, int width, int h
   glViewport(0, 0, width, height);
 }
 
-void Application::scroll_callback(GLFWwindow *window, double xoffset, double yoffset)
-{
-  Application *app = static_cast<Application *>(glfwGetWindowUserPointer(window));
+void Application::scroll_callback(GLFWwindow *window, double xoffset,
+                                  double yoffset) {
+  Application *app =
+      static_cast<Application *>(glfwGetWindowUserPointer(window));
   ImGuiIO &io = ImGui::GetIO();
-  if (app && app->m_Camera && !io.WantCaptureMouse)
-  {
+  if (app && app->m_Camera && !io.WantCaptureMouse) {
     app->m_Camera->ProcessMouseScroll((float)yoffset);
     app->m_StaticCacheDirty = true;
   }

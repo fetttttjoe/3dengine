@@ -1,10 +1,11 @@
 #pragma once
 
-#include <vector>
+#include <glad/glad.h>
+
+#include <glm/glm.hpp>
 #include <memory>
 #include <unordered_map>
-#include <glad/glad.h>
-#include <glm/glm.hpp>
+#include <vector>
 
 // Forward declarations
 class Camera;
@@ -12,61 +13,61 @@ class Shader;
 class ISceneObject;
 
 // Enum to identify which axis a handle controls
-enum class GizmoDimension {
-    WIDTH, HEIGHT, DEPTH, NONE
-};
+enum class GizmoDimension { WIDTH, HEIGHT, DEPTH, NONE };
 
 // Represents a single draggable handle
 struct GizmoHandle {
-    uint32_t id;
-    glm::vec3 basePosition; // Position relative to object's origin {1,0,0}, {-1,0,0} etc.
-    glm::vec4 color;
-    GizmoDimension dimension;
-    float direction; // +1 or -1 along the axis
+  uint32_t id;
+  glm::vec3 basePosition;  // Position relative to object's origin {1,0,0},
+                           // {-1,0,0} etc.
+  glm::vec4 color;
+  GizmoDimension dimension;
+  float direction;  // +1 or -1 along the axis
 };
 
 // Manages all handles for a selected object
 class TransformGizmo {
-public:
-    TransformGizmo();
-    ~TransformGizmo();
+ public:
+  TransformGizmo();
+  ~TransformGizmo();
 
-    // Assigns the gizmo to a target object
-    void SetTarget(ISceneObject* target);
-    ISceneObject* GetTarget() const { return m_Target; }
+  // Assigns the gizmo to a target object
+  void SetTarget(ISceneObject* target);
+  ISceneObject* GetTarget() const { return m_Target; }
 
-    // Updates the target dimension based on mouse drag
-    void Update(const Camera& camera, const glm::vec2& mouseDelta, bool isDragging, int winWidth, int winHeight);
+  // Updates the target dimension based on mouse drag
+  void Update(const Camera& camera, const glm::vec2& mouseDelta,
+              bool isDragging, int winWidth, int winHeight);
 
-    // Renders the gizmo handles
-    void Draw(const Camera& camera);
-    void DrawForPicking(const Camera& camera, Shader& pickingShader);
+  // Renders the gizmo handles
+  void Draw(const Camera& camera);
+  void DrawForPicking(const Camera& camera, Shader& pickingShader);
 
-    // Handle selection
-    void SetActiveHandle(uint32_t id);
-    GizmoHandle* GetActiveHandle() { return m_ActiveHandle; }
-    
-    // Checks if a given ID belongs to this gizmo
-    static bool IsGizmoID(uint32_t id) { return id >= GIZMO_ID_START; }
+  // Handle selection
+  void SetActiveHandle(uint32_t id);
+  GizmoHandle* GetActiveHandle() { return m_ActiveHandle; }
 
-private:
-    void CreateHandles();
-    void InitializeRendererObjects();
-    GizmoHandle* GetHandleByID(uint32_t id);
+  // Checks if a given ID belongs to this gizmo
+  static bool IsGizmoID(uint32_t id) { return id >= GIZMO_ID_START; }
 
-    ISceneObject* m_Target;
-    std::vector<GizmoHandle> m_Handles;
-    GizmoHandle* m_ActiveHandle;
+ private:
+  void CreateHandles();
+  void InitializeRendererObjects();
+  GizmoHandle* GetHandleByID(uint32_t id);
 
-    // Rendering resources
-    std::shared_ptr<Shader> m_Shader;
-    GLuint m_VAO = 0;
-    GLuint m_VBO = 0;
-    GLsizei m_IndexCount = 0;
+  ISceneObject* m_Target;
+  std::vector<GizmoHandle> m_Handles;
+  GizmoHandle* m_ActiveHandle;
 
-    // A map to get the float* for each dimension from the target's properties
-    std::unordered_map<GizmoDimension, float*> m_DimensionPointers;
+  // Rendering resources
+  std::shared_ptr<Shader> m_Shader;
+  GLuint m_VAO = 0;
+  GLuint m_VBO = 0;
+  GLsizei m_IndexCount = 0;
 
-    // A constant to offset gizmo IDs from object IDs
-    static const uint32_t GIZMO_ID_START = 1000000;
+  // A map to get the float* for each dimension from the target's properties
+  std::unordered_map<GizmoDimension, float*> m_DimensionPointers;
+
+  // A constant to offset gizmo IDs from object IDs
+  static const uint32_t GIZMO_ID_START = 1000000;
 };

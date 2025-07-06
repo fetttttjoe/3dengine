@@ -5,21 +5,21 @@
 //              scene object classes. Adheres to DIP.
 // =======================================================================
 #pragma once
-#include <string>
 #include <functional>
-#include <unordered_map>
 #include <memory>
+#include <string>
+#include <unordered_map>
 
 // Forward-declare the interface, no need to include Interfaces.h here.
 class ISceneObject;
 
 class SceneObjectFactory {
-public:
-    using CreateObjectFunc = std::function<std::unique_ptr<ISceneObject>()>;
+ public:
+  using CreateObjectFunc = std::function<std::unique_ptr<ISceneObject>()>;
 
-    void Register(const std::string& objectType, CreateObjectFunc func);
-    std::unique_ptr<ISceneObject> Create(const std::string& objectType) const;
+  void Register(const std::string& objectType, CreateObjectFunc func);
+  std::unique_ptr<ISceneObject> Create(const std::string& objectType) const;
 
-private:
-    std::unordered_map<std::string, CreateObjectFunc> m_Registry;
+ private:
+  std::unordered_map<std::string, CreateObjectFunc> m_Registry;
 };

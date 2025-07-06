@@ -1,38 +1,44 @@
 #pragma once
 
-#include "Interfaces.h"
-#include <memory>
-#include <vector>
-#include <string>
 #include <glad/glad.h>
+
 #include <glm/glm.hpp>
+#include <memory>
+#include <string>
+#include <vector>
+
+#include "Interfaces.h"
 
 class Shader;
 
-class BaseObject : public ISceneObject
-{
-public:
+class BaseObject : public ISceneObject {
+ public:
   BaseObject();
   ~BaseObject() override;
 
   // ISceneObject overrides
   void Draw(const glm::mat4 &view, const glm::mat4 &projection) override;
-  void DrawForPicking(Shader &pickingShader, const glm::mat4 &view, const glm::mat4 &projection) override;
-  void DrawHighlight(const glm::mat4 &view, const glm::mat4 &projection) const override;
+  void DrawForPicking(Shader &pickingShader, const glm::mat4 &view,
+                      const glm::mat4 &projection) override;
+  void DrawHighlight(const glm::mat4 &view,
+                     const glm::mat4 &projection) const override;
 
-  std::string GetTypeString() const override = 0; // Pure virtual, must be implemented by concrete classes
-  const std::vector<ObjectProperty>& GetProperties() const override;
+  std::string GetTypeString() const override =
+      0;  // Pure virtual, must be implemented by concrete classes
+  const std::vector<ObjectProperty> &GetProperties() const override;
   void RebuildMesh() override;
 
-protected:
+ protected:
   // For derived classes to define their geometry
-  virtual void BuildMeshData(std::vector<float> &vertices, std::vector<unsigned int> &indices) = 0;
-  
+  virtual void BuildMeshData(std::vector<float> &vertices,
+                             std::vector<unsigned int> &indices) = 0;
+
   // Helper to set up OpenGL buffers
-  void SetupMesh(const std::vector<float> &vertices, const std::vector<unsigned int> &indices);
-  
+  void SetupMesh(const std::vector<float> &vertices,
+                 const std::vector<unsigned int> &indices);
+
   // Helper for derived classes to register their properties
-  void AddProperty(const std::string& name, void* value_ptr, PropertyType type);
+  void AddProperty(const std::string &name, void *value_ptr, PropertyType type);
 
   // Rendering
   GLuint m_VAO = 0;
