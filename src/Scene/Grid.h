@@ -1,7 +1,6 @@
-// =======================================================================
-// File: src/Scene/Objects/Grid.h
-// =======================================================================
 #pragma once
+
+#include <glm/gtc/quaternion.hpp>
 #include <memory>
 #include <string>
 #include <vector>
@@ -12,7 +11,7 @@ class Shader;
 
 class Grid : public ISceneObject {
  public:
-  Grid(int size = 20, int divisions = 20);
+  Grid(int size = 40, int divisions = 40);
   ~Grid() override;
 
   // ISceneObject Overrides
@@ -22,13 +21,47 @@ class Grid : public ISceneObject {
   void DrawHighlight(const glm::mat4& view,
                      const glm::mat4& projection) const override;
   std::string GetTypeString() const override;
-  const std::vector<ObjectProperty>& GetProperties() const override;
+  void RebuildMesh() override;
+
+  // Property interface implementation (Grid has no editable properties)
+  PropertySet& GetPropertySet() override { return m_Properties; }
+  const PropertySet& GetPropertySet() const override { return m_Properties; }
+
+  // Transform interface implementation (Grid is static at the origin)
+  const glm::mat4& GetTransform() const override;
+  glm::vec3 GetPosition() const override;
+  glm::quat GetRotation() const override;
+  glm::vec3 GetScale() const override;
+  void SetPosition(const glm::vec3& position) override;
+  void SetRotation(const glm::quat& rotation) override;
+  void SetScale(const glm::vec3& scale) override;
+  void SetEulerAngles(const glm::vec3& eulerAngles) override;
+
+  // IGizmoClient implementation (Grid is not editable via gizmo)
+  std::vector<GizmoHandleDef> GetGizmoHandleDefs() override;
+  void OnGizmoUpdate(const std::string& propertyName, float delta,
+                     const glm::vec3& axis) override;
+
+  // Grid-specific methods
+  void SetConfiguration(int size, int divisions);
+  glm::vec3 GetClosestGridPoint(const glm::vec3& worldPoint) const;
 
  private:
+  void Initialize();
+
+  // Rendering
   unsigned int m_VAO = 0, m_VBO = 0;
-  // FIX: This must be a std::shared_ptr to match the ResourceManager return
-  // type.
   std::shared_ptr<Shader> m_Shader;
   int m_VertexCount = 0;
-  std::vector<ObjectProperty> m_Properties;  // Grid has no editable properties
+
+  // Configuration
+  int m_Size;
+  int m_Divisions;
+  float m_Spacing;
+
+  // An empty property set to satisfy the interface
+  PropertySet m_Properties;
+
+  // Transform (static)
+  glm::mat4 m_Transform{1.0f};
 };

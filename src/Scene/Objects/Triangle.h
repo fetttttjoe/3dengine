@@ -1,6 +1,6 @@
 #pragma once
 
-#include "BaseObject.h"
+#include "Scene/Objects/BaseObject.h"
 
 class Triangle : public BaseObject {
  public:
@@ -11,6 +11,9 @@ class Triangle : public BaseObject {
   std::string GetTypeString() const override;
 
  protected:
+  // This is a helper for the transform calculation, not part of the public API
+  glm::vec3 GetLocalCenter() const override;
+
   // BaseObject override
   void BuildMeshData(std::vector<float>& vertices,
                      std::vector<unsigned int>& indices) override;

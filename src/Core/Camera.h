@@ -8,6 +8,7 @@ class Camera {
  public:
   Camera(GLFWwindow* window, glm::vec3 position = glm::vec3(0.0f, 2.0f, 8.0f));
 
+  void ResetToDefault();
   void HandleInput(float deltaTime, std::function<void()> onUpdateCallback);
 
   void ProcessMouseScroll(float yoffset);

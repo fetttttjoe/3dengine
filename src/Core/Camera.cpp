@@ -63,6 +63,15 @@ void Camera::HandleInput(float deltaTime,
   }
 }
 
+void Camera::ResetToDefault() {
+  // same values as the ctor defaults
+  m_Position = glm::vec3(0.0f, 2.0f, 8.0f);
+  m_Yaw = -90.0f;
+  m_Pitch = -10.0f;
+  m_Zoom = 45.0f;
+  updateMatrices();
+}
+
 void Camera::ProcessMouseScroll(float yoffset) {
   m_Position += m_Front * yoffset * 0.5f;
   updateMatrices();
