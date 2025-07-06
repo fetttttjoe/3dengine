@@ -7,22 +7,20 @@
 #include <unordered_map>
 #include <vector>
 
+#include "Interfaces.h"  // Now includes the new gizmo definitions
+
 // Forward declarations
 class Camera;
 class Shader;
 class ISceneObject;
 
-// Enum to identify which axis a handle controls
-enum class GizmoDimension { WIDTH, HEIGHT, DEPTH, NONE };
-
-// Represents a single draggable handle
+// Represents a single draggable handle instance created from a GizmoHandleDef
 struct GizmoHandle {
   uint32_t id;
-  glm::vec3 basePosition;  // Position relative to object's origin {1,0,0},
-                           // {-1,0,0} etc.
+  std::string propertyName;
+  glm::vec3 localDirection;
   glm::vec4 color;
-  GizmoDimension dimension;
-  float direction;  // +1 or -1 along the axis
+  float directionMultiplier;  // +1 or -1
 };
 
 // Manages all handles for a selected object
@@ -31,7 +29,7 @@ class TransformGizmo {
   TransformGizmo();
   ~TransformGizmo();
 
-  // Assigns the gizmo to a target object
+  // Assigns the gizmo to a target object (which must be an IGizmoClient)
   void SetTarget(ISceneObject* target);
   ISceneObject* GetTarget() const { return m_Target; }
 
@@ -55,7 +53,8 @@ class TransformGizmo {
   void InitializeRendererObjects();
   GizmoHandle* GetHandleByID(uint32_t id);
 
-  ISceneObject* m_Target;
+  ISceneObject*
+      m_Target;  // The target is an ISceneObject, which is an IGizmoClient
   std::vector<GizmoHandle> m_Handles;
   GizmoHandle* m_ActiveHandle;
 
@@ -64,9 +63,6 @@ class TransformGizmo {
   GLuint m_VAO = 0;
   GLuint m_VBO = 0;
   GLsizei m_IndexCount = 0;
-
-  // A map to get the float* for each dimension from the target's properties
-  std::unordered_map<GizmoDimension, float*> m_DimensionPointers;
 
   // A constant to offset gizmo IDs from object IDs
   static const uint32_t GIZMO_ID_START = 1000000;

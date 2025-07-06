@@ -1,14 +1,15 @@
 #pragma once
 
-#include "BaseObject.h"
+#include "Scene/Objects/BaseObject.h"
 
 class Pyramid : public BaseObject {
  public:
   Pyramid();
   ~Pyramid() override = default;
 
-  // ISceneObject override
+  // ISceneObject overrides
   std::string GetTypeString() const override;
+  glm::vec3 GetLocalCenter() const override;
 
  protected:
   // BaseObject override

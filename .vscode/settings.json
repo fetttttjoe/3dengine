@@ -72,6 +72,20 @@
     "xlocmes": "cpp",
     "xlocmon": "cpp",
     "xloctime": "cpp",
-    "xtree": "cpp"
+    "xtree": "cpp",
+    "any": "cpp",
+    "condition_variable": "cpp",
+    "deque": "cpp",
+    "set": "cpp",
+    "unordered_set": "cpp",
+    "variant": "cpp",
+    "codecvt": "cpp",
+    "csignal": "cpp",
+    "filesystem": "cpp",
+    "numeric": "cpp",
+    "ranges": "cpp",
+    "regex": "cpp",
+    "span": "cpp",
+    "valarray": "cpp"
   }
 }

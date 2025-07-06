@@ -1,9 +1,9 @@
 #include "OpenGLRenderer.h"
 #define GLFW_INCLUDE_NONE
 
-#include <glad/glad.h>
 #include <GLFW/glfw3.h>
 
+#include <glm/gtc/matrix_transform.hpp>
 #include <vector>
 
 #include "Core/Camera.h"
@@ -16,7 +16,20 @@
 #include "Shader.h"
 #include "imgui_impl_opengl3.h"
 
-OpenGLRenderer::OpenGLRenderer() {}
+OpenGLRenderer::OpenGLRenderer()
+    : m_Window(nullptr),
+      m_Width(0),
+      m_Height(0),
+      m_PickingFBO(0),
+      m_PickingTexture(0),
+      m_SceneFBO(0),
+      m_SceneColorTexture(0),
+      m_DepthTexture(0),
+      m_AnchorVAO(0),
+      m_AnchorVBO(0),
+      m_AnchorEBO(0),
+      m_AnchorIndexCount(0) {}
+
 OpenGLRenderer::~OpenGLRenderer() { Shutdown(); }
 
 bool OpenGLRenderer::Initialize(void* windowHandle) {
@@ -30,17 +43,16 @@ bool OpenGLRenderer::Initialize(void* windowHandle) {
   glEnable(GL_BLEND);
   glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-  // Load shaders via ResourceManager
   m_PickingShader = ResourceManager::LoadShader(
       "picking", "shaders/picking.vert", "shaders/picking.frag");
   m_HighlightShader = ResourceManager::LoadShader(
       "highlight", "shaders/highlight.vert", "shaders/highlight.frag");
-  m_BlitShader = ResourceManager::LoadShader("blit", "shaders/blit.vert",
-                                             "shaders/blit.frag");
+  m_AnchorShader = ResourceManager::LoadShader(
+      "anchor_shader", "shaders/default.vert", "shaders/default.frag");
 
   glfwGetWindowSize(m_Window, &m_Width, &m_Height);
   createFramebuffers();
-  createFullscreenQuad();
+  createAnchorMesh();
 
   Log::Debug("OpenGLRenderer Initialized successfully.");
   return true;
@@ -49,76 +61,78 @@ bool OpenGLRenderer::Initialize(void* windowHandle) {
 void OpenGLRenderer::cleanupFramebuffers() {
   glDeleteFramebuffers(1, &m_PickingFBO);
   glDeleteTextures(1, &m_PickingTexture);
-  glDeleteFramebuffers(1, &m_StaticSceneFBO);
-  glDeleteTextures(1, &m_StaticSceneColorTexture);
+  glDeleteFramebuffers(1, &m_SceneFBO);
+  glDeleteTextures(1, &m_SceneColorTexture);
   glDeleteTextures(1, &m_DepthTexture);
 }
 
 void OpenGLRenderer::Shutdown() {
   Log::Debug("OpenGLRenderer shutdown.");
   cleanupFramebuffers();
-  glDeleteVertexArrays(1, &m_FullscreenQuadVAO);
+  glDeleteVertexArrays(1, &m_AnchorVAO);
+  glDeleteBuffers(1, &m_AnchorVBO);
+  glDeleteBuffers(1, &m_AnchorEBO);
 }
 
 void OpenGLRenderer::OnWindowResize(int width, int height) {
-  if (width == 0 || height == 0) return;
+  if (width == 0 || height == 0 || (m_Width == width && m_Height == height))
+    return;
+
   m_Width = width;
   m_Height = height;
-  Log::Debug("Window resized, recreating framebuffers for new dimensions: ",
-             width, "x", height);
+  Log::Debug("Recreating scene framebuffer for new dimensions: ", width, "x",
+             height);
   cleanupFramebuffers();
   createFramebuffers();
 }
 
-void OpenGLRenderer::RenderStaticScene(const Scene& scene,
-                                       const Camera& camera) {
-  glBindFramebuffer(GL_FRAMEBUFFER, m_StaticSceneFBO);
+void OpenGLRenderer::BeginSceneFrame() {
+  glBindFramebuffer(GL_FRAMEBUFFER, m_SceneFBO);
   glViewport(0, 0, m_Width, m_Height);
-  glClearColor(0.1f, 0.1f, 0.15f, 1.0f);
+  glClearColor(0.12f, 0.13f, 0.15f, 1.0f);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+}
 
+void OpenGLRenderer::EndSceneFrame() { glBindFramebuffer(GL_FRAMEBUFFER, 0); }
+
+void OpenGLRenderer::RenderScene(const Scene& scene, const Camera& camera) {
   const auto& view = camera.GetViewMatrix();
   const auto& projection = camera.GetProjectionMatrix();
 
-  // IMPROVEMENT: Render objects to the static cache based on the `isStatic`
-  // flag, not by checking their type. This is more flexible.
   for (const auto& object : scene.GetSceneObjects()) {
-    if (object->isStatic) {
-      object->Draw(view, projection);
-    }
+    object->Draw(view, projection);
   }
-  glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
-void OpenGLRenderer::DrawCachedStaticScene() {
-  glDisable(GL_DEPTH_TEST);
-  m_BlitShader->Bind();
-  glBindVertexArray(m_FullscreenQuadVAO);
-  glActiveTexture(GL_TEXTURE0);
-  glBindTexture(GL_TEXTURE_2D, m_StaticSceneColorTexture);
-  m_BlitShader->SetUniform1i("screenTexture", 0);
-  glDrawArrays(GL_TRIANGLES, 0, 6);
-  glEnable(GL_DEPTH_TEST);
-}
+void OpenGLRenderer::RenderAnchors(const Scene& scene, const Camera& camera) {
+  m_AnchorShader->Bind();
+  m_AnchorShader->SetUniformMat4f("u_View", camera.GetViewMatrix());
+  m_AnchorShader->SetUniformMat4f("u_Projection", camera.GetProjectionMatrix());
+  m_AnchorShader->SetUniform4f("u_Color", 0.0f, 1.0f, 0.0f, 1.0f);
 
-void OpenGLRenderer::RenderDynamicScene(const Scene& scene,
-                                        const Camera& camera) {
-  const auto& view = camera.GetViewMatrix();
-  const auto& projection = camera.GetProjectionMatrix();
+  glBindVertexArray(m_AnchorVAO);
 
-  // IMPROVEMENT: Render non-static objects based on the `isStatic` flag.
   for (const auto& object : scene.GetSceneObjects()) {
-    if (!object->isStatic) {
-      object->Draw(view, projection);
-    }
+    if (!object->isSelectable) continue;
+
+    glm::vec4 anchor_local(0.0f, 0.0f, 0.0f, 1.0f);
+    glm::vec3 anchor_world = object->GetTransform() * anchor_local;
+
+    glm::mat4 model = glm::translate(glm::mat4(1.0f), anchor_world);
+    model = glm::scale(model, glm::vec3(0.05f));
+
+    m_AnchorShader->SetUniformMat4f("u_Model", model);
+    glDrawElements(GL_TRIANGLES, m_AnchorIndexCount, GL_UNSIGNED_INT, nullptr);
   }
+  glBindVertexArray(0);
 }
 
 void OpenGLRenderer::BeginFrame() {
-  glBindFramebuffer(GL_FRAMEBUFFER, 0);
-  glViewport(0, 0, m_Width, m_Height);
-  glClearColor(0.1f, 0.1f, 0.15f, 1.0f);
-  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  int display_w, display_h;
+  glfwGetFramebufferSize(m_Window, &display_w, &display_h);
+  glViewport(0, 0, display_w, display_h);
+  glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+  glClear(GL_COLOR_BUFFER_BIT);
 }
 
 void OpenGLRenderer::EndFrame() { glfwSwapBuffers(m_Window); }
@@ -137,7 +151,6 @@ uint32_t OpenGLRenderer::ProcessPicking(int x, int y, const Scene& scene,
   const auto& view = camera.GetViewMatrix();
   const auto& projection = camera.GetProjectionMatrix();
 
-  // IMPROVEMENT: Only draw selectable objects into the picking buffer.
   for (const auto& object : scene.GetSceneObjects()) {
     if (object->isSelectable) {
       object->DrawForPicking(*m_PickingShader, view, projection);
@@ -146,13 +159,11 @@ uint32_t OpenGLRenderer::ProcessPicking(int x, int y, const Scene& scene,
 
   glReadBuffer(GL_COLOR_ATTACHMENT0);
   uint32_t objectID = 0;
-  // Y is inverted between window coordinates and framebuffer/texture
-  // coordinates
   glReadPixels(x, m_Height - y, 1, 1, GL_RED_INTEGER, GL_UNSIGNED_INT,
                &objectID);
 
   glBindFramebuffer(GL_FRAMEBUFFER, 0);
-  Log::Debug("Picking processed. Clicked on Object ID: ", objectID);
+  // Log::Debug("Picking processed. Clicked on Object ID: ", objectID);
   return objectID;
 }
 
@@ -161,9 +172,8 @@ uint32_t OpenGLRenderer::ProcessGizmoPicking(int x, int y,
                                              const Camera& camera) {
   glBindFramebuffer(GL_FRAMEBUFFER, m_PickingFBO);
   glViewport(0, 0, m_Width, m_Height);
-  // Clear only color, gizmo should draw over existing depth values
   glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
-  glClear(GL_COLOR_BUFFER_BIT);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
   gizmo.DrawForPicking(camera, *m_PickingShader);
 
@@ -181,14 +191,12 @@ void OpenGLRenderer::RenderHighlight(const ISceneObject& object,
   glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
   glLineWidth(2.5f);
   m_HighlightShader->Bind();
-  m_HighlightShader->SetUniformMat4f("u_Model", object.transform);
+  m_HighlightShader->SetUniformMat4f("u_Model", object.GetTransform());
   m_HighlightShader->SetUniformMat4f("u_View", camera.GetViewMatrix());
   m_HighlightShader->SetUniformMat4f("u_Projection",
                                      camera.GetProjectionMatrix());
-  m_HighlightShader->SetUniform4f("u_Color", 1.0f, 0.8f, 0.0f,
-                                  1.0f);  // Orange highlight
+  m_HighlightShader->SetUniform4f("u_Color", 1.0f, 0.8f, 0.0f, 1.0f);
 
-  // Use the object's own draw call for its geometry
   object.DrawHighlight(camera.GetViewMatrix(), camera.GetProjectionMatrix());
 
   m_HighlightShader->Unbind();
@@ -197,13 +205,15 @@ void OpenGLRenderer::RenderHighlight(const ISceneObject& object,
 }
 
 void OpenGLRenderer::createFramebuffers() {
-  // --- Shared Depth Texture ---
+  // We need one depth texture that can be shared by the picking and scene FBOs
   glGenTextures(1, &m_DepthTexture);
   glBindTexture(GL_TEXTURE_2D, m_DepthTexture);
   glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, m_Width, m_Height, 0,
                GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
-  // --- Picking FBO ---
+  // Picking FBO
   glGenFramebuffers(1, &m_PickingFBO);
   glBindFramebuffer(GL_FRAMEBUFFER, m_PickingFBO);
   glGenTextures(1, &m_PickingTexture);
@@ -217,42 +227,45 @@ void OpenGLRenderer::createFramebuffers() {
   if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
     Log::Debug("ERROR: Picking FBO is not complete!");
 
-  // --- Static Scene Cache FBO ---
-  glGenFramebuffers(1, &m_StaticSceneFBO);
-  glBindFramebuffer(GL_FRAMEBUFFER, m_StaticSceneFBO);
-  glGenTextures(1, &m_StaticSceneColorTexture);
-  glBindTexture(GL_TEXTURE_2D, m_StaticSceneColorTexture);
+  // Main Scene FBO (for the viewport)
+  glGenFramebuffers(1, &m_SceneFBO);
+  glBindFramebuffer(GL_FRAMEBUFFER, m_SceneFBO);
+  glGenTextures(1, &m_SceneColorTexture);
+  glBindTexture(GL_TEXTURE_2D, m_SceneColorTexture);
   glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, m_Width, m_Height, 0, GL_RGB,
                GL_UNSIGNED_BYTE, NULL);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
   glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D,
-                         m_StaticSceneColorTexture, 0);
+                         m_SceneColorTexture, 0);
   glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D,
                          m_DepthTexture, 0);
   if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
-    Log::Debug("ERROR: Static Scene FBO is not complete!");
+    Log::Debug("ERROR: Scene FBO is not complete!");
 
   glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
-void OpenGLRenderer::createFullscreenQuad() {
-  float quadVertices[] = {// positions   // texCoords
-                          -1.0f, 1.0f, 0.0f, 0.0f,  1.0f, -1.0f, -1.0f, 0.0f,
-                          0.0f,  0.0f, 1.0f, -1.0f, 0.0f, 1.0f,  0.0f,
+void OpenGLRenderer::createAnchorMesh() {
+  float vertices[] = {-0.5f, -0.5f, 0.5f, 0.5f, -0.5f, 0.5f,  0.5f,  0.5f,
+                      0.5f,  -0.5f, 0.5f, 0.5f, -0.5f, -0.5f, -0.5f, -0.5f,
+                      0.5f,  -0.5f, 0.5f, 0.5f, -0.5f, 0.5f,  -0.5f, -0.5f};
+  unsigned int indices[] = {0, 1, 2, 2, 3, 0, 4, 5, 6, 6, 7, 4,
+                            3, 2, 6, 6, 5, 3, 0, 1, 7, 7, 4, 0,
+                            1, 7, 6, 6, 2, 1, 0, 4, 5, 5, 3, 0};
+  m_AnchorIndexCount = 36;
 
-                          -1.0f, 1.0f, 0.0f, 0.0f,  1.0f, 1.0f,  -1.0f, 0.0f,
-                          1.0f,  0.0f, 1.0f, 1.0f,  0.0f, 1.0f,  1.0f};
-  unsigned int vbo;
-  glGenVertexArrays(1, &m_FullscreenQuadVAO);
-  glGenBuffers(1, &vbo);
-  glBindVertexArray(m_FullscreenQuadVAO);
-  glBindBuffer(GL_ARRAY_BUFFER, vbo);
-  glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), &quadVertices,
+  glGenVertexArrays(1, &m_AnchorVAO);
+  glGenBuffers(1, &m_AnchorVBO);
+  glGenBuffers(1, &m_AnchorEBO);
+
+  glBindVertexArray(m_AnchorVAO);
+  glBindBuffer(GL_ARRAY_BUFFER, m_AnchorVBO);
+  glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_AnchorEBO);
+  glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices,
                GL_STATIC_DRAW);
+  glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
   glEnableVertexAttribArray(0);
-  glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
-  glEnableVertexAttribArray(1);
-  glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float),
-                        (void*)(3 * sizeof(float)));
+  glBindVertexArray(0);
 }

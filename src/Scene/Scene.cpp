@@ -1,75 +1,112 @@
 #include "Scene.h"
 
+#include <Core/SettingsManager.h>
+
 #include <algorithm>
+#include <fstream>
+#include <glm/glm.hpp>  // for glm::vec3
+#include <iomanip>
 #include <iostream>
-#include <string>
 
 #include "Factories/SceneObjectFactory.h"
-#include "Grid.h"
 #include "Interfaces.h"
+#include "nlohmann/json.hpp"
 
-Scene::Scene(SceneObjectFactory *factory) : m_ObjectFactory(factory) {}
-Scene::~Scene() {}
+Scene::Scene(SceneObjectFactory* factory) : m_ObjectFactory(factory) {}
 
-// Private helper to get the next available number for a given name.
-int Scene::GetNextAvailableIndexForName(const std::string &baseName) {
-  int maxNum = 0;
-  // Iterate through all objects to find the highest existing number for a given
-  // base name
-  for (const auto &obj : m_Objects) {
-    // Check for numbered copies like "Pyramid (1)"
-    if (obj->name.rfind(baseName + " (", 0) == 0) {
-      try {
-        size_t start = baseName.length() + 2;  // Move past "<baseName> ("
-        size_t end = obj->name.length() - 1;   // Move before ")"
-        int num = std::stoi(obj->name.substr(start, end - start));
-        if (num > maxNum) {
-          maxNum = num;
-        }
-      } catch (const std::exception &) {
-        // Ignore if parsing fails, it's not a valid numbered copy.
-      }
+Scene::~Scene() = default;
+
+void Scene::Clear() {
+  // Keep only non-selectable (e.g. the grid), then renumber IDs
+  m_Objects.erase(
+      std::remove_if(m_Objects.begin(), m_Objects.end(),
+                     [](auto const& obj) { return obj->isSelectable; }),
+      m_Objects.end());
+  m_SelectedIndex = -1;
+  m_NextObjectID = 1;
+  for (auto const& o : m_Objects)
+    m_NextObjectID = std::max(m_NextObjectID, o->id + 1);
+}
+
+void Scene::Save(const std::string& filepath) const {
+  nlohmann::json sceneJ;
+  sceneJ["objects"] = nlohmann::json::array();
+
+  uint32_t maxId = 0;
+  for (auto const& o : m_Objects) {
+    if (o->isSelectable) {
+      nlohmann::json oj;
+      o->Serialize(oj);
+      sceneJ["objects"].push_back(oj);
     }
+    maxId = std::max(maxId, o->id);
   }
-  return maxNum + 1;
+  sceneJ["next_object_id"] = maxId + 1;
+
+  std::ofstream ofs(filepath);
+  ofs << std::setw(4) << sceneJ << "\n";
+}
+
+void Scene::Load(const std::string& filepath) {
+  std::ifstream in(filepath);
+  if (!in.is_open()) {
+    Log::Debug("Could not open scene file for loading: ", filepath);
+    return;
+  }
+
+  nlohmann::json sceneJson;
+  in >> sceneJson;
+
+  // 1) remove all selectable objects, keep things like Grid
+  Clear();
+
+  // 2) restore next‐ID
+  m_NextObjectID = sceneJson.value("next_object_id", 1);
+
+  // 3) recreate each saved object
+  const auto& arr = sceneJson["objects"];
+  for (const auto& objJson : arr) {
+    std::string type = objJson.value("type", "");
+    auto clone = m_ObjectFactory->Create(type);
+    if (!clone) continue;
+
+    // give it back its exact old state (including id & name)
+    clone->Deserialize(objJson);
+
+    // ensure our allocator won't reuse this ID
+    if (clone->id >= m_NextObjectID) m_NextObjectID = clone->id + 1;
+
+    // push _without_ reassigning id
+    m_Objects.push_back(std::move(clone));
+  }
 }
 
 void Scene::AddObject(std::unique_ptr<ISceneObject> object) {
-  if (object) {
-    object->id = m_NextObjectID++;
-    m_Objects.push_back(std::move(object));
-  }
+  if (!object) return;
+  object->id = m_NextObjectID++;
+  m_Objects.push_back(std::move(object));
 }
 
-const std::vector<std::unique_ptr<ISceneObject>> &Scene::GetSceneObjects()
+const std::vector<std::unique_ptr<ISceneObject>>& Scene::GetSceneObjects()
     const {
   return m_Objects;
 }
 
-ISceneObject *Scene::GetObjectByID(uint32_t id) {
-  auto it = std::find_if(
-      m_Objects.begin(), m_Objects.end(),
-      [id](const std::unique_ptr<ISceneObject> &obj) { return obj->id == id; });
-
-  if (it != m_Objects.end()) {
-    return it->get();
-  }
-  return nullptr;
+ISceneObject* Scene::GetObjectByID(uint32_t id) {
+  auto it = std::find_if(m_Objects.begin(), m_Objects.end(),
+                         [id](auto const& o) { return o->id == id; });
+  return (it != m_Objects.end() ? it->get() : nullptr);
 }
 
 void Scene::SetSelectedObjectByID(uint32_t id) {
-  if (m_SelectedIndex != -1 && m_SelectedIndex < m_Objects.size()) {
+  if (m_SelectedIndex >= 0 && m_SelectedIndex < (int)m_Objects.size())
     m_Objects[m_SelectedIndex]->isSelected = false;
-  }
 
   m_SelectedIndex = -1;
-
-  for (int i = 0; i < m_Objects.size(); ++i) {
-    if (m_Objects[i]->id == id) {
-      if (m_Objects[i]->isSelectable) {
-        m_SelectedIndex = i;
-        m_Objects[i]->isSelected = true;
-      }
+  for (int i = 0; i < (int)m_Objects.size(); ++i) {
+    if (m_Objects[i]->id == id && m_Objects[i]->isSelectable) {
+      m_SelectedIndex = i;
+      m_Objects[i]->isSelected = true;
       break;
     }
   }
@@ -80,105 +117,82 @@ void Scene::SelectNextObject() {
     SetSelectedObjectByID(0);
     return;
   }
-
-  int startIndex = (m_SelectedIndex == -1) ? 0 : m_SelectedIndex + 1;
-
-  for (size_t i = 0; i < m_Objects.size(); ++i) {
-    size_t currentIndex = (startIndex + i) % m_Objects.size();
-    if (m_Objects[currentIndex]->isSelectable) {
-      SetSelectedObjectByID(m_Objects[currentIndex]->id);
+  int start = (m_SelectedIndex < 0 ? 0 : m_SelectedIndex + 1);
+  for (int d = 0; d < (int)m_Objects.size(); ++d) {
+    int i = (start + d) % m_Objects.size();
+    if (m_Objects[i]->isSelectable) {
+      SetSelectedObjectByID(m_Objects[i]->id);
       return;
     }
   }
   SetSelectedObjectByID(0);
 }
 
-void Scene::DeleteSelectedObject() {
-  if (m_SelectedIndex >= 0 && m_SelectedIndex < m_Objects.size()) {
-    if (m_Objects[m_SelectedIndex]->isSelectable) {
-      m_Objects.erase(m_Objects.begin() + m_SelectedIndex);
-      m_SelectedIndex = -1;
-    } else {
-      std::cout
-          << "Attempted to delete a non-selectable object. Operation denied."
-          << std::endl;
-    }
-  }
-}
-// In file: src/Scene/Scene.cpp
-
 void Scene::DeleteObjectByID(uint32_t id) {
-  auto it = std::find_if(
-      m_Objects.begin(), m_Objects.end(),
-      [id](const std::unique_ptr<ISceneObject> &obj) { return obj->id == id; });
+  auto it = std::find_if(m_Objects.begin(), m_Objects.end(),
+                         [id](auto const& o) { return o->id == id; });
+  if (it == m_Objects.end() || !(*it)->isSelectable) return;
 
-  if (it != m_Objects.end()) {
-    if (!it->get()->isSelectable) {
-      return;
-    }
-
-    // Get the index of the object we are about to delete
-    size_t deletedIndex = std::distance(m_Objects.begin(), it);
-
-    if (it->get() == GetSelectedObject()) {
-      // The object being deleted is the selected one, so reset selection.
-      m_SelectedIndex = -1;
-    }
-
-    m_Objects.erase(it);
-
-    if (m_SelectedIndex != -1 && deletedIndex < m_SelectedIndex) {
-      m_SelectedIndex--;
-    }
-  }
+  bool wasSelected = ((*it)->isSelected);
+  m_Objects.erase(it);
+  if (wasSelected) m_SelectedIndex = -1;
 }
 
-void Scene::DuplicateObject(uint32_t id) {
-  ISceneObject *original = GetObjectByID(id);
-  if (!original) {
-    std::cerr << "Attempted to duplicate non-existent object with ID: " << id
-              << std::endl;
-    return;
-  }
-
-  if (!original->isSelectable) {
-    std::cerr
-        << "Attempted to duplicate non-selectable object. Operation denied."
-        << std::endl;
-    return;
-  }
-
-  if (!m_ObjectFactory) {
-    std::cerr << "Error: Scene object factory not set, cannot duplicate object."
-              << std::endl;
-    return;
-  }
-
-  std::unique_ptr<ISceneObject> newObject =
-      m_ObjectFactory->Create(original->GetTypeString());
-  if (newObject) {
-    // FIX: The base name for a duplicate should come from its fundamental type,
-    // not its current (potentially user-edited) name. This makes the logic
-    // more robust and predictable.
-    std::string baseName = original->GetTypeString();
-
-    int nextIndex = GetNextAvailableIndexForName(baseName);
-    newObject->name = baseName + " (" + std::to_string(nextIndex) + ")";
-
-    // Copy transform and slightly offset
-    newObject->transform =
-        original->transform *
-        glm::translate(glm::mat4(1.0f), glm::vec3(1.0f, 1.0f, 0.0f));
-    AddObject(std::move(newObject));
-  } else {
-    std::cerr << "Failed to duplicate object with ID: " << id
-              << ". Type: " << original->GetTypeString() << std::endl;
-  }
+void Scene::DeleteSelectedObject() {
+  if (auto* s = GetSelectedObject()) DeleteObjectByID(s->id);
 }
 
-ISceneObject *Scene::GetSelectedObject() {
-  if (m_SelectedIndex >= 0 && m_SelectedIndex < m_Objects.size()) {
-    return m_Objects[m_SelectedIndex].get();
+ISceneObject* Scene::GetSelectedObject() {
+  return (m_SelectedIndex >= 0 && m_SelectedIndex < (int)m_Objects.size())
+             ? m_Objects[m_SelectedIndex].get()
+             : nullptr;
+}
+
+int Scene::GetNextAvailableIndexForName(const std::string& baseName) const {
+  int maxNum = 0;
+  bool foundBase = false;
+  for (auto const& o : m_Objects) {
+    if (o->name == baseName) foundBase = true;
+    if (o->name.rfind(baseName + " (", 0) == 0) {
+      try {
+        auto num = std::stoi(o->name.substr(
+            baseName.size() + 2, o->name.size() - baseName.size() - 3));
+        maxNum = std::max(maxNum, num);
+      } catch (...) {
+      }
+    }
   }
-  return nullptr;
+  if (foundBase && maxNum == 0) return 1;
+  return maxNum + 1;
+}
+
+void Scene::DuplicateObject(uint32_t sourceID) {
+  // 1) locate the original
+  ISceneObject* orig = GetObjectByID(sourceID);
+  if (!orig || !orig->isSelectable || !m_ObjectFactory) return;
+
+  // 2) deep-clone via factory
+  auto clone = m_ObjectFactory->Copy(*orig);
+  if (!clone) return;
+
+  // 3) assign new ID
+  clone->id = m_NextObjectID++;
+
+  // 4) fresh name: “Type” or “Type (n)”
+  {
+    std::string base = orig->GetTypeString();
+    int idx = GetNextAvailableIndexForName(base);
+    clone->name = (idx == 0) ? base : base + " (" + std::to_string(idx) + ")";
+  }
+
+  // 5) offset position so it isn’t exactly on top
+  {
+    auto p = orig->GetPosition();
+    glm::vec3 origPos = orig->GetPosition();
+    glm::vec3 offset = SettingsManager::Get().cloneOffset;
+    clone->SetPosition(origPos + offset);
+  }
+
+  // 6) insert into scene
+  m_Objects.push_back(std::move(clone));
 }

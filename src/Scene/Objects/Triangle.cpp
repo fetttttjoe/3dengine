@@ -1,22 +1,31 @@
-#include "Triangle.h"
+#include "Scene/Objects/Triangle.h"
+
+#include "Core/PropertyNames.h"
+#include "Scene/Objects/ObjectTypes.h"
 
 Triangle::Triangle() {
-  name = "Triangle";
-  // This object is 2D, so depth is irrelevant.
-  m_Depth = 0.0f;
+  name = std::string(ObjectTypes::Triangle);
+  m_Properties.SetValue<float>(PropertyNames::Depth, 0.0f);
   RebuildMesh();
 }
 
-std::string Triangle::GetTypeString() const { return "Triangle"; }
+std::string Triangle::GetTypeString() const {
+  return std::string(ObjectTypes::Triangle);
+}
+
+glm::vec3 Triangle::GetLocalCenter() const {
+  return glm::vec3(
+      0.0f, m_Properties.GetValue<float>(PropertyNames::Height) * 0.5f, 0.0f);
+}
 
 void Triangle::BuildMeshData(std::vector<float>& vertices,
                              std::vector<unsigned int>& indices) {
-  // Dimensions are taken from BaseObject members
-  float w = m_Width * 0.5f;
-  float h = m_Height * 0.5f;
+  float half_w = m_Properties.GetValue<float>(PropertyNames::Width) * 0.5f;
+  float h = m_Properties.GetValue<float>(PropertyNames::Height);
 
-  // A simple triangle in the X-Y plane.
-  vertices = {0.0f, h, 0.0f, -w, -h, 0.0f, w, -h, 0.0f};
+  vertices = {
+      0.0f, h, 0.0f, -half_w, 0.0f, 0.0f, half_w, 0.0f, 0.0f,
+  };
 
   indices = {0, 1, 2};
 }
