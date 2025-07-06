@@ -16,10 +16,11 @@ public:
     const glm::mat4& GetViewMatrix() const { return m_ViewMatrix; }
     const glm::mat4& GetProjectionMatrix() const { return m_ProjectionMatrix; }
     
-    // --- NEW HELPER METHODS ---
     glm::vec3 GetPosition() const { return m_Position; }
-    glm::vec3 WorldToScreenDirection(const glm::vec3& worldDir) const;
-
+    
+    // Helpers to convert between world and screen coordinates
+    glm::vec2 WorldToScreen(const glm::vec3& worldPos, int windowWidth, int windowHeight) const;
+    glm::vec3 ScreenToWorldPoint(const glm::vec2& screenPos, float depth, int windowWidth, int windowHeight) const;
 
 private:
     void updateMatrices();

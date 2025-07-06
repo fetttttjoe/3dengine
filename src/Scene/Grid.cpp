@@ -1,8 +1,6 @@
-// =======================================================================
-// File: src/Scene/Grid.cpp
-// =======================================================================
 #include "Scene/Grid.h"
-#include "Shader.h" // Corrected include path for Shader.h (assuming it's in src/Renderer/)
+#include "Shader.h"
+#include "Core/ResourceManager.h"
 #include <glad/glad.h>
 #include <vector>
 #include <glm/glm.hpp>
@@ -12,16 +10,17 @@
 
 Grid::Grid(int size, int divisions) {
     name = "Grid";
-    m_VAO = 0; // Initialize
-    m_VBO = 0; // Initialize
+    m_Shader = ResourceManager::LoadShader("grid_shader", "shaders/default.vert", "shaders/default.frag");
 
     std::vector<float> vertices;
     float step = (float)size / divisions;
     float halfSize = (float)size / 2.0f;
     for (int i = 0; i <= divisions; ++i) {
         float pos = -halfSize + i * step;
+        // Lines along Z axis
         vertices.push_back(-halfSize); vertices.push_back(0.0f); vertices.push_back(pos);
         vertices.push_back(halfSize);  vertices.push_back(0.0f); vertices.push_back(pos);
+        // Lines along X axis
         vertices.push_back(pos); vertices.push_back(0.0f); vertices.push_back(-halfSize);
         vertices.push_back(pos); vertices.push_back(0.0f); vertices.push_back(halfSize);
     }
@@ -39,8 +38,6 @@ Grid::Grid(int size, int divisions) {
 
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindVertexArray(0);
-
-    m_Shader = std::make_unique<Shader>("shaders/default.vert", "shaders/default.frag");
 }
 
 Grid::~Grid() {
@@ -49,6 +46,7 @@ Grid::~Grid() {
 }
 
 void Grid::Draw(const glm::mat4& view, const glm::mat4& projection) {
+    if (!m_Shader) return;
     m_Shader->Bind();
     m_Shader->SetUniformMat4f("u_Model", transform);
     m_Shader->SetUniformMat4f("u_View", view);
@@ -60,18 +58,18 @@ void Grid::Draw(const glm::mat4& view, const glm::mat4& projection) {
 }
 
 void Grid::DrawForPicking(Shader& pickingShader, const glm::mat4& view, const glm::mat4& projection) {
-    // Grid is usually not pickable, so this can be empty,
-    // or you can draw it with a specific ID (e.g., 0) that signifies background/non-pickable.
-    return;
+    // Grid is not pickable.
 }
 
-// FIX: Implement the pure virtual DrawHighlight method
 void Grid::DrawHighlight(const glm::mat4& view, const glm::mat4& projection) const {
-    // Grids typically don't have visual highlights, so this can be an empty implementation.
-    return;
+    // Grid cannot be selected, so no highlight is needed.
 }
 
-// FIX: Implement the pure virtual GetTypeString method
 std::string Grid::GetTypeString() const {
     return "Grid";
+}
+
+// FIX: Implement the missing GetProperties function.
+const std::vector<ObjectProperty>& Grid::GetProperties() const {
+    return m_Properties;
 }

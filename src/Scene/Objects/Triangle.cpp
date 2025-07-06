@@ -1,22 +1,29 @@
-// Scene/Objects/Triangle.cpp
 #include "Triangle.h"
 
 Triangle::Triangle() {
-    m_TypeString = "Triangle";
-    name = m_TypeString;
-    // Now that m_TypeString (and any dims) are set, build the mesh:
+    name = "Triangle";
+    // This object is 2D, so depth is irrelevant.
+    m_Depth = 0.0f;
     RebuildMesh();
+}
+
+std::string Triangle::GetTypeString() const {
+    return "Triangle";
 }
 
 void Triangle::BuildMeshData(std::vector<float>& vertices,
                              std::vector<unsigned int>& indices)
 {
-    // Simple 2D triangle in the X–Y plane at Z=0
+    // Dimensions are taken from BaseObject members
+    float w = m_Width * 0.5f;
+    float h = m_Height * 0.5f;
+
+    // A simple triangle in the X-Y plane.
     vertices = {
-         0.0f,  0.5f, 0.0f,
-        -0.5f, -0.5f, 0.0f,
-         0.5f, -0.5f, 0.0f
+         0.0f,    h, 0.0f,
+           -w,   -h, 0.0f,
+            w,   -h, 0.0f
     };
-    // single triangle
+    
     indices = { 0, 1, 2 };
 }

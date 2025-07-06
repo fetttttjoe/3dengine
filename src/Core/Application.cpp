@@ -1,4 +1,5 @@
 #include "Core/Application.h"
+#include "Core/ResourceManager.h" // New
 #include "Renderer/OpenGLRenderer.h"
 #include "Scene/Scene.h"
 #include "Core/Camera.h"
@@ -43,7 +44,7 @@ void Application::Initialize()
   glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
 #endif
 
-  m_Window = glfwCreateWindow(m_WindowWidth, m_WindowHeight, "Intuitive Modeler v1.0", NULL, NULL);
+  m_Window = glfwCreateWindow(m_WindowWidth, m_WindowHeight, "Intuitive Modeler v2.0", NULL, NULL);
   if (!m_Window)
   {
     glfwTerminate();
@@ -57,6 +58,8 @@ void Application::Initialize()
   glfwSetCursorPosCallback(m_Window, cursor_position_callback);
   glfwSwapInterval(1);
 
+  ResourceManager::Initialize();
+
   m_Renderer = std::make_unique<OpenGLRenderer>();
   if (!m_Renderer->Initialize(m_Window))
   {
@@ -69,7 +72,7 @@ void Application::Initialize()
   m_Scene = std::make_unique<Scene>(m_ObjectFactory.get());
   m_Camera = std::make_unique<Camera>(m_Window);
   m_UI = std::make_unique<UI>(m_Scene.get());
-  m_TransformGizmo = std::make_unique<TransformGizmo>(); // Initialize Gizmo
+  m_TransformGizmo = std::make_unique<TransformGizmo>(); 
   m_UI->Initialize(m_Window);
 
   m_UI->SetObjectFactory(m_ObjectFactory.get());
@@ -120,7 +123,6 @@ void Application::Run()
     if (selectedObject)
     {
       m_Renderer->RenderHighlight(*selectedObject, *m_Camera);
-      // New: Render the transform gizmo for the selected object
       m_TransformGizmo->Draw(*m_Camera);
     }
 
@@ -136,6 +138,7 @@ void Application::Cleanup()
 {
   m_UI->Shutdown();
   m_Renderer->Shutdown();
+  ResourceManager::Shutdown();
   if (m_Window)
   {
     glfwDestroyWindow(m_Window);
@@ -166,7 +169,6 @@ void Application::processMouseInput()
   ImGuiIO &io = ImGui::GetIO();
   if (io.WantCaptureMouse)
   {
-    // If ImGui is using the mouse, clear our dragging state
     m_IsDraggingObject = false;
     m_IsDraggingGizmo = false;
     m_DraggedObject = nullptr;
@@ -181,23 +183,20 @@ void Application::processMouseInput()
     m_LastMousePos = glm::vec2((float)xpos, (float)ypos);
 
     // --- GIZMO PICKING PASS ---
-    // First, check if we clicked a gizmo handle
     uint32_t gizmoID = m_Renderer->ProcessGizmoPicking((int)xpos, (int)ypos, *m_TransformGizmo, *m_Camera);
     if (TransformGizmo::IsGizmoID(gizmoID))
     {
       m_IsDraggingGizmo = true;
       m_TransformGizmo->SetActiveHandle(gizmoID);
-      return; // Don't check for object picking if we hit a handle
+      return; 
     }
 
     // --- OBJECT PICKING PASS ---
-    // If we didn't click a handle, check for objects
     uint32_t objectID = m_Renderer->ProcessPicking((int)xpos, (int)ypos, *m_Scene, *m_Camera);
     ISceneObject *lastSelected = m_Scene->GetSelectedObject();
     m_Scene->SetSelectedObjectByID(objectID);
     ISceneObject *currentSelected = m_Scene->GetSelectedObject();
 
-    // Update gizmo target if selection changed
     if (lastSelected != currentSelected)
     {
       m_TransformGizmo->SetTarget(currentSelected);
@@ -207,6 +206,9 @@ void Application::processMouseInput()
     {
       m_IsDraggingObject = true;
       m_DraggedObject = currentSelected;
+    } else {
+      m_IsDraggingObject = false;
+      m_DraggedObject = nullptr;
     }
   }
 
@@ -222,36 +224,28 @@ void Application::processMouseInput()
 void Application::cursor_position_callback(GLFWwindow *window, double xpos, double ypos)
 {
   Application *app = static_cast<Application *>(glfwGetWindowUserPointer(window));
-  if (!app)
-    return;
+  if (!app) return;
 
   glm::vec2 currentMousePos((float)xpos, (float)ypos);
   glm::vec2 mouseDelta = currentMousePos - app->m_LastMousePos;
   app->m_LastMousePos = currentMousePos;
 
   ImGuiIO &io = ImGui::GetIO();
-  if (io.WantCaptureMouse)
-    return;
+  if (io.WantCaptureMouse) return;
 
   // --- GIZMO DRAGGING LOGIC ---
   if (app->m_IsDraggingGizmo)
   {
-    app->m_TransformGizmo->Update(*app->m_Camera, mouseDelta, true);
+    app->m_TransformGizmo->Update(*app->m_Camera, mouseDelta, true, app->m_WindowWidth, app->m_WindowHeight);
   }
   // --- OBJECT DRAGGING LOGIC ---
   else if (app->m_IsDraggingObject && app->m_DraggedObject)
   {
+    // Simplified dragging on a plane facing the camera at the object's distance
     glm::vec3 objectWorldPos = app->m_DraggedObject->GetPosition();
-    glm::vec4 screenPos = app->m_Camera->GetProjectionMatrix() * app->m_Camera->GetViewMatrix() * glm::vec4(objectWorldPos, 1.0f);
-    screenPos /= screenPos.w;
-    float depth = screenPos.z; // Use clip space Z
-
-    glm::vec4 newWorldPosHomogeneous = glm::inverse(app->m_Camera->GetProjectionMatrix() * app->m_Camera->GetViewMatrix()) * glm::vec4(
-      (currentMousePos.x / app->m_WindowWidth) * 2.0f - 1.0f,
-      1.0f - (currentMousePos.y / app->m_WindowHeight) * 2.0f,
-      depth,
-      1.0f);
-    glm::vec3 newWorldPos = glm::vec3(newWorldPosHomogeneous) / newWorldPosHomogeneous.w;
+    float distance = glm::length(app->m_Camera->GetPosition() - objectWorldPos);
+    glm::vec3 newWorldPos = app->m_Camera->ScreenToWorldPoint(currentMousePos, distance, app->m_WindowWidth, app->m_WindowHeight);
+    
     app->m_DraggedObject->SetPosition(newWorldPos);
   }
   else if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS || glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_MIDDLE) == GLFW_PRESS)
@@ -260,7 +254,6 @@ void Application::cursor_position_callback(GLFWwindow *window, double xpos, doub
   }
 }
 
-// Other callbacks (error_callback, framebuffer_size_callback, scroll_callback) remain unchanged...
 void Application::error_callback(int error, const char *description)
 {
   std::cerr << "GLFW Error [" << error << "]: " << description << std::endl;
@@ -275,7 +268,7 @@ void Application::framebuffer_size_callback(GLFWwindow *window, int width, int h
     app->m_WindowHeight = height;
     if (app->m_Camera)
     {
-      app->m_Camera->SetAspectRatio((float)width / height);
+      app->m_Camera->SetAspectRatio((float)width / (height > 0 ? height : 1));
     }
     if (app->m_Renderer)
     {

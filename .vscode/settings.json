@@ -1,6 +1,6 @@
 {
   "C_Cpp.errorSquiggles": "enabled",
-  "cmake.sourceDirectory": "/home/yanneck/Work/3dengine",
+  "cmake.sourceDirectory": "D:/Dev/C++/Model",
   "files.associations": {
     "atomic": "cpp",
     "bit": "cpp",

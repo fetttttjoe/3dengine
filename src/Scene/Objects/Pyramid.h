@@ -1,4 +1,3 @@
-// Scene/Objects/Pyramid.h
 #pragma once
 
 #include "BaseObject.h"
@@ -8,9 +7,11 @@ public:
     Pyramid();
     ~Pyramid() override = default;
 
-    std::string GetTypeString() const override { return m_TypeString; }
+    // ISceneObject override
+    std::string GetTypeString() const override;
 
 protected:
+    // BaseObject override
     void BuildMeshData(std::vector<float>& vertices,
                        std::vector<unsigned int>& indices) override;
 };
