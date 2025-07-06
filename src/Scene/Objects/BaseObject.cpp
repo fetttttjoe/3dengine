@@ -1,4 +1,5 @@
 #include "BaseObject.h"
+#include "Core/ResourceManager.h"
 #include "Shader.h"
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -6,51 +7,40 @@
 
 BaseObject::BaseObject()
 {
-    // Generate GL buffers & arrays
     glGenVertexArrays(1, &m_VAO);
     glGenBuffers(1, &m_VBO);
     glGenBuffers(1, &m_EBO);
 
-    // Default shader
-    m_Shader = std::make_unique<Shader>(
-        "shaders/default.vert", "shaders/default.frag");
+    // Get the default shader from the resource manager
+    m_Shader = ResourceManager::LoadShader("default", "shaders/default.vert", "shaders/default.frag");
+
+    // Register common properties that all base objects will have
+    AddProperty("Color", &m_Color, PropertyType::Color_Vec4);
+    AddProperty("Width", &m_Width, PropertyType::Float);
+    AddProperty("Height", &m_Height, PropertyType::Float);
+    AddProperty("Depth", &m_Depth, PropertyType::Float);
 }
 
 BaseObject::~BaseObject()
 {
-    if (m_EBO)
-        glDeleteBuffers(1, &m_EBO);
-    if (m_VBO)
-        glDeleteBuffers(1, &m_VBO);
-    if (m_VAO)
-        glDeleteVertexArrays(1, &m_VAO);
+    if (m_EBO) glDeleteBuffers(1, &m_EBO);
+    if (m_VBO) glDeleteBuffers(1, &m_VBO);
+    if (m_VAO) glDeleteVertexArrays(1, &m_VAO);
 }
 
-glm::vec3 BaseObject::GetPosition() const
-{
-    return glm::vec3(transform[3]);
+void BaseObject::AddProperty(const std::string& name, void* value_ptr, PropertyType type) {
+    m_Properties.push_back({name, value_ptr, type});
 }
 
-void BaseObject::SetPosition(const glm::vec3 &position)
-{
-    transform[3] = glm::vec4(position, 1.0f);
+const std::vector<ObjectProperty>& BaseObject::GetProperties() const {
+    return m_Properties;
 }
-
-glm::vec3 BaseObject::GetEulerAngles() const
-{
-    glm::vec3 scale, skew, position;
-    glm::quat rotation;
-    glm::vec4 perspective;
-    glm::decompose(transform, scale, rotation, position, skew, perspective);
-    return glm::degrees(glm::eulerAngles(rotation));
-}
-
-// --- EXISTING METHODS ---
 
 void BaseObject::SetupMesh(const std::vector<float> &vertices,
                            const std::vector<unsigned int> &indices)
 {
     m_IndexCount = static_cast<GLsizei>(indices.size());
+    if (m_IndexCount == 0) return;
 
     glBindVertexArray(m_VAO);
 
@@ -66,10 +56,8 @@ void BaseObject::SetupMesh(const std::vector<float> &vertices,
                  indices.data(),
                  GL_STATIC_DRAW);
 
-    // position attribute
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE,
-                          3 * sizeof(float),
-                          (void *)0);
+    // Position attribute
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void *)0);
     glEnableVertexAttribArray(0);
 
     glBindVertexArray(0);
@@ -86,17 +74,15 @@ void BaseObject::RebuildMesh()
 void BaseObject::Draw(const glm::mat4 &view,
                       const glm::mat4 &projection)
 {
+    if (!m_Shader) return;
     m_Shader->Bind();
     m_Shader->SetUniformMat4f("u_Model", transform);
     m_Shader->SetUniformMat4f("u_View", view);
     m_Shader->SetUniformMat4f("u_Projection", projection);
-    m_Shader->SetUniform4f("u_Color",
-                           m_Color.x, m_Color.y,
-                           m_Color.z, m_Color.w);
+    m_Shader->SetUniformVec4("u_Color", m_Color);
 
     glBindVertexArray(m_VAO);
-    glDrawElements(GL_TRIANGLES, m_IndexCount,
-                   GL_UNSIGNED_INT, nullptr);
+    glDrawElements(GL_TRIANGLES, m_IndexCount, GL_UNSIGNED_INT, nullptr);
     glBindVertexArray(0);
 }
 
@@ -111,29 +97,15 @@ void BaseObject::DrawForPicking(Shader &pickingShader,
     pickingShader.SetUniform1ui("u_ObjectID", id);
 
     glBindVertexArray(m_VAO);
-    glDrawElements(GL_TRIANGLES, m_IndexCount,
-                   GL_UNSIGNED_INT, nullptr);
+    glDrawElements(GL_TRIANGLES, m_IndexCount, GL_UNSIGNED_INT, nullptr);
     glBindVertexArray(0);
 }
 
 void BaseObject::DrawHighlight(const glm::mat4 &view,
                                const glm::mat4 &projection) const
 {
-    // Highlight shader is assumed bound externally
+    // A highlight shader is assumed to be bound by the renderer
     glBindVertexArray(m_VAO);
-    glDrawElements(GL_TRIANGLES, m_IndexCount,
-                   GL_UNSIGNED_INT, nullptr);
+    glDrawElements(GL_TRIANGLES, m_IndexCount, GL_UNSIGNED_INT, nullptr);
     glBindVertexArray(0);
-}
-
-std::vector<ObjectProperty> BaseObject::GetProperties()
-{
-    return {
-        {"Width", &m_Width},
-        {"Height", &m_Height},
-        {"Depth", &m_Depth},
-        {"Color R", &m_Color.r},
-        {"Color G", &m_Color.g},
-        {"Color B", &m_Color.b},
-        {"Color A", &m_Color.a}};
 }

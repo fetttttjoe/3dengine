@@ -1,11 +1,9 @@
-// Renderer/Shader.cpp
 #include "Shader.h"
-
+#include "Core/Log.h"
 #include <iostream>
 #include <fstream>
 #include <sstream>
 #include <vector>
-
 #include <glad/glad.h>
 #include <glm/gtc/type_ptr.hpp>
 
@@ -14,26 +12,24 @@ Shader::Shader(const std::string &vp, const std::string &fp)
 {
     auto vsSrc = loadShaderSource(vp);
     auto fsSrc = loadShaderSource(fp);
-    m_RendererID = createShaderProgram(vsSrc, fsSrc);
+    if (!vsSrc.empty() && !fsSrc.empty()) {
+        m_RendererID = createShaderProgram(vsSrc, fsSrc);
+    }
 }
 
-
-// NEW CONSTRUCTOR: Loads from string literals (memory)
 Shader::Shader(const char* vertexSource, const char* fragmentSource, bool fromMemory)
     : m_RendererID(0)
 {
-    // The 'fromMemory' flag is currently unused in this implementation,
-    // but it allows you to overload more clearly if needed for other logic.
-    // For now, we just directly use the provided sources.
-    m_RendererID = createShaderProgram(vertexSource, fragmentSource);
+    if (vertexSource && fragmentSource) {
+        m_RendererID = createShaderProgram(vertexSource, fragmentSource);
+    }
 }
-
 
 Shader::~Shader() {
     if (m_RendererID) glDeleteProgram(m_RendererID);
 }
 
-void Shader::Bind()   const { glUseProgram(m_RendererID); }
+void Shader::Bind()   const { if (m_RendererID) glUseProgram(m_RendererID); }
 void Shader::Unbind() const { glUseProgram(0); }
 
 void Shader::SetUniform1ui(const std::string &name, uint32_t value) {
@@ -55,7 +51,6 @@ void Shader::SetUniformMat4f(const std::string &name, const glm::mat4 &m) {
     glUniformMatrix4fv(getUniformLocation(name), 1, GL_FALSE, glm::value_ptr(m));
 }
 
-// --- convenience overloads ---
 void Shader::SetUniformVec3(const std::string& name, const glm::vec3& v) {
     SetUniform3f(name, v.x, v.y, v.z);
 }
@@ -64,12 +59,13 @@ void Shader::SetUniformVec4(const std::string& name, const glm::vec4& v) {
 }
 
 int Shader::getUniformLocation(const std::string &name) {
-    if (auto it = m_UniformLocationCache.find(name); it != m_UniformLocationCache.end())
-        return it->second;
-
+    if (m_UniformLocationCache.count(name)) {
+        return m_UniformLocationCache[name];
+    }
     int loc = glGetUniformLocation(m_RendererID, name.c_str());
-    if (loc == -1)
-        std::cerr << "Warning: uniform '" << name << "' doesn't exist!\n";
+    if (loc == -1) {
+        Log::Debug("Warning: uniform '", name, "' doesn't exist or is not active.");
+    }
     m_UniformLocationCache[name] = loc;
     return loc;
 }
@@ -77,7 +73,7 @@ int Shader::getUniformLocation(const std::string &name) {
 std::string Shader::loadShaderSource(const std::string &filepath) {
     std::ifstream in(filepath);
     if (!in.is_open()) {
-        std::cerr << "ERROR: Could not open shader file: " << filepath << "\n";
+        Log::Debug("ERROR: Could not open shader file: ", filepath);
         return "";
     }
     std::stringstream ss;
@@ -98,7 +94,7 @@ unsigned int Shader::compileShader(unsigned int type, const std::string &source)
         glGetShaderiv(id, GL_INFO_LOG_LENGTH, &len);
         std::vector<char> msg(len);
         glGetShaderInfoLog(id, len, &len, msg.data());
-        std::cerr << "Shader compilation failed: " << msg.data() << "\n";
+        Log::Debug("Shader compilation failed: ", msg.data());
         glDeleteShader(id);
         return 0;
     }
@@ -109,11 +105,27 @@ unsigned int Shader::createShaderProgram(const std::string &vs, const std::strin
     unsigned int prog = glCreateProgram();
     unsigned int v = compileShader(GL_VERTEX_SHADER,   vs);
     unsigned int f = compileShader(GL_FRAGMENT_SHADER, fs);
-    if (!v || !f) return 0;
+    if (!v || !f) {
+        glDeleteProgram(prog);
+        glDeleteShader(v);
+        glDeleteShader(f);
+        return 0;
+    }
 
     glAttachShader(prog, v);
     glAttachShader(prog, f);
     glLinkProgram(prog);
+
+    int status;
+    glGetProgramiv(prog, GL_LINK_STATUS, &status);
+    if (!status) {
+        int len;
+        glGetProgramiv(prog, GL_INFO_LOG_LENGTH, &len);
+        std::vector<char> msg(len);
+        glGetProgramInfoLog(prog, len, &len, msg.data());
+        Log::Debug("Shader linking failed: ", msg.data());
+    }
+
     glValidateProgram(prog);
 
     glDeleteShader(v);

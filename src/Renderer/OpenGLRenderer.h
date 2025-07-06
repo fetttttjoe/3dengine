@@ -29,28 +29,27 @@ public:
     void EndFrame();
 
     uint32_t ProcessPicking(int x, int y, const Scene& scene, const Camera& camera);
-    // NEW: Method to specifically pick gizmo handles
     uint32_t ProcessGizmoPicking(int x, int y, TransformGizmo& gizmo, const Camera& camera);
 
 private:
-    void createPickingFramebuffer();
-    void createStaticSceneCache();
-    void createFullscreenQuad();
+    void createFramebuffers();
     void cleanupFramebuffers();
+    void createFullscreenQuad();
 
     GLFWwindow* m_Window = nullptr;
+    int m_Width = 0, m_Height = 0;
 
     // Framebuffers
     unsigned int m_PickingFBO = 0;
     unsigned int m_PickingTexture = 0;
     unsigned int m_StaticSceneFBO = 0;
     unsigned int m_StaticSceneColorTexture = 0;
-    unsigned int m_DepthTexture = 0;
+    unsigned int m_DepthTexture = 0; // Shared depth texture
 
     // Shaders
-    std::unique_ptr<Shader> m_PickingShader;
-    std::unique_ptr<Shader> m_HighlightShader;
-    std::unique_ptr<Shader> m_BlitShader;
+    std::shared_ptr<Shader> m_PickingShader;
+    std::shared_ptr<Shader> m_HighlightShader;
+    std::shared_ptr<Shader> m_BlitShader;
 
     // Fullscreen Quad for blitting
     unsigned int m_FullscreenQuadVAO = 0;

@@ -1,9 +1,9 @@
-// src/Scene/Objects/BaseObject.h
 #pragma once
 
 #include "Interfaces.h"
 #include <memory>
 #include <vector>
+#include <string>
 #include <glad/glad.h>
 #include <glm/glm.hpp>
 
@@ -20,34 +20,31 @@ public:
   void DrawForPicking(Shader &pickingShader, const glm::mat4 &view, const glm::mat4 &projection) override;
   void DrawHighlight(const glm::mat4 &view, const glm::mat4 &projection) const override;
 
-  std::string GetTypeString() const override { return m_TypeString; }
-  glm::vec4 GetColor() const { return m_Color; }
-  void SetColor(const glm::vec4 &c) { m_Color = c; }
-  std::vector<ObjectProperty> GetProperties() override;
+  std::string GetTypeString() const override = 0; // Pure virtual, must be implemented by concrete classes
+  const std::vector<ObjectProperty>& GetProperties() const override;
   void RebuildMesh() override;
 
-  // --- NEW HELPER METHODS ---
-  // You should add these to the ISceneObject interface as well
-  glm::vec3 GetPosition() const override;
-  void SetPosition(const glm::vec3& position) override;
-  glm::vec3 GetEulerAngles() const override;
-
-
 protected:
+  // For derived classes to define their geometry
   virtual void BuildMeshData(std::vector<float> &vertices, std::vector<unsigned int> &indices) = 0;
+  
+  // Helper to set up OpenGL buffers
   void SetupMesh(const std::vector<float> &vertices, const std::vector<unsigned int> &indices);
+  
+  // Helper for derived classes to register their properties
+  void AddProperty(const std::string& name, void* value_ptr, PropertyType type);
 
+  // Rendering
   GLuint m_VAO = 0;
   GLuint m_VBO = 0;
   GLuint m_EBO = 0;
   GLsizei m_IndexCount = 0;
+  std::shared_ptr<Shader> m_Shader;
 
-  glm::vec4 m_Color = glm::vec4(1.0f);
-
+  // Common properties
+  std::vector<ObjectProperty> m_Properties;
+  glm::vec4 m_Color = glm::vec4(0.8f, 0.8f, 0.8f, 1.0f);
   float m_Width = 1.0f;
   float m_Height = 1.0f;
   float m_Depth = 1.0f;
-
-  std::unique_ptr<Shader> m_Shader;
-  std::string m_TypeString = "BaseObject";
 };

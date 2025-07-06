@@ -1,18 +1,14 @@
-// Core/UI/UI.cpp
 #include "Core/UI/UI.h"
 #include "Core/Log.h"
 #include "Core/UI/UIElements.h"
-
 #include "Scene/Scene.h"
 #include "Factories/SceneObjectFactory.h"
-#include "Interfaces.h"           // for ISceneObject
-#include "Scene/Grid.h"           // to skip in outliner
-#include "Scene/Objects/BaseObject.h" // for color API
-
+#include "Interfaces.h"
+#include "Scene/Grid.h"
+#include "Scene/Objects/BaseObject.h"
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
-
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/matrix_decompose.hpp>
 #include <glm/gtc/quaternion.hpp>
@@ -70,7 +66,7 @@ void UI::DrawMainMenu() {
     if (ImGui::BeginMenu("File")) {
         UIElements::ActionMenuItem("Exit", []() {
             Log::Debug("Menu Action: Exit clicked.");
-            // TODO: actually close window
+            // This needs to be hooked up to the Application to close the window.
         });
         ImGui::EndMenu();
     }
@@ -91,7 +87,7 @@ void UI::DrawMainMenu() {
         UIElements::ActionMenuItem("Delete Selected", [this]() {
             Log::Debug("Menu Action: Delete Selected.");
             m_Scene->DeleteSelectedObject();
-        });
+        }, m_Scene->GetSelectedObject() != nullptr);
 
         ImGui::EndMenu();
     }
@@ -110,14 +106,16 @@ void UI::DrawSceneOutliner() {
     {
         ImGui::TableSetupColumn("Name",       ImGuiTableColumnFlags_WidthStretch);
         ImGui::TableSetupColumn("Rename",     ImGuiTableColumnFlags_WidthFixed, 60.0f);
-        ImGui::TableSetupColumn("Dup",        ImGuiTableColumnFlags_WidthFixed, 50.0f);
-        ImGui::TableSetupColumn("Del",        ImGuiTableColumnFlags_WidthFixed, 50.0f);
+        ImGui::TableSetupColumn("Duplicate",  ImGuiTableColumnFlags_WidthFixed, 75.0f);
+        ImGui::TableSetupColumn("Delete",     ImGuiTableColumnFlags_WidthFixed, 60.0f);
+        ImGui::TableHeadersRow();
 
         const auto& objects = m_Scene->GetSceneObjects();
         for (const auto& objPtr : objects) {
             if (dynamic_cast<Grid*>(objPtr.get())) continue;
 
             uint32_t oid = objPtr->id;
+            ImGui::PushID(oid);
             ImGui::TableNextRow();
             ImGui::TableNextColumn();
 
@@ -127,15 +125,14 @@ void UI::DrawSceneOutliner() {
                 char buf[256];
                 std::strncpy(buf, m_RenameBuffer.c_str(), sizeof(buf));
                 buf[sizeof(buf)-1] = '\0';
-                if (ImGui::InputText("##rename", buf, sizeof(buf), ImGuiInputTextFlags_EnterReturnsTrue)) {
+                if (ImGui::InputText("##rename", buf, sizeof(buf), ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll)) {
                     objPtr->name = buf;
-                    m_RenameBuffer = buf;
                     m_RenameID = 0;
                 }
                 ImGui::PopItemWidth();
             } else {
                 bool isSelected = (objPtr.get() == m_Scene->GetSelectedObject());
-                if (ImGui::Selectable(objPtr->name.c_str(), isSelected)) {
+                if (ImGui::Selectable(objPtr->name.c_str(), isSelected, ImGuiSelectableFlags_SpanAllColumns)) {
                     m_Scene->SetSelectedObjectByID(oid);
                 }
             }
@@ -143,32 +140,33 @@ void UI::DrawSceneOutliner() {
             // Rename button or OK/Cancel
             ImGui::TableNextColumn();
             if (oid != m_RenameID) {
-                if (UIElements::SmallButton("Edit")) {
+                if (ImGui::Button("Rename")) {
                     m_RenameID = oid;
                     m_RenameBuffer = objPtr->name;
                 }
             } else {
-                if (UIElements::SmallButton("OK")) {
+                if (ImGui::Button("OK")) {
                     objPtr->name = m_RenameBuffer;
                     m_RenameID = 0;
                 }
                 ImGui::SameLine();
-                if (UIElements::SmallButton("Cancel")) {
+                if (ImGui::Button("Cancel")) {
                     m_RenameID = 0;
                 }
             }
 
             // Duplicate button
             ImGui::TableNextColumn();
-            if (UIElements::SmallButton("Dup")) {
+            if (ImGui::Button("Duplicate")) {
                 idToDuplicate = oid;
             }
 
             // Delete button
             ImGui::TableNextColumn();
-            if (UIElements::SmallButton("Del")) {
+            if (ImGui::Button("Delete")) {
                 idToDelete = oid;
             }
+            ImGui::PopID();
         }
 
         ImGui::EndTable();
@@ -192,64 +190,58 @@ void UI::DrawPropertiesPanel() {
         return;
     }
 
-    // Inline rename in properties
-    ImGui::PushItemWidth(-1);
-    {
-        char nameBuf[256];
-        std::strncpy(nameBuf, selected->name.c_str(), sizeof(nameBuf));
-        nameBuf[sizeof(nameBuf)-1] = '\0';
-        if (ImGui::InputText("Name", nameBuf, sizeof(nameBuf), ImGuiInputTextFlags_EnterReturnsTrue)) {
-            selected->name = nameBuf;
-        }
+    // --- Object Name and ID ---
+    char nameBuf[256];
+    std::strncpy(nameBuf, selected->name.c_str(), sizeof(nameBuf));
+    nameBuf[sizeof(nameBuf)-1] = '\0';
+    if (ImGui::InputText("Name", nameBuf, sizeof(nameBuf))) {
+        selected->name = nameBuf;
     }
-    ImGui::PopItemWidth();
-
     ImGui::Text("ID: %u", selected->id);
     ImGui::Separator();
 
-    // Transform
-    glm::vec3 position, scale, skew;
-    glm::quat rotation;
-    glm::vec4 perspective;
-    glm::decompose(selected->transform, scale, rotation, position, skew, perspective);
-    glm::vec3 euler = glm::degrees(glm::eulerAngles(rotation));
+    // --- Transform Section ---
+    if (ImGui::CollapsingHeader("Transform", ImGuiTreeNodeFlags_DefaultOpen)) {
+        glm::vec3 position, scale, skew;
+        glm::quat rotation;
+        glm::vec4 perspective;
+        glm::decompose(selected->transform, scale, rotation, position, skew, perspective);
+        glm::vec3 euler = glm::degrees(glm::eulerAngles(rotation));
 
-    bool changed = false;
-    changed |= ImGui::DragFloat3("Position", glm::value_ptr(position), 0.1f);
-    changed |= ImGui::DragFloat3("Rotation", glm::value_ptr(euler), 1.0f);
-    changed |= ImGui::DragFloat3("Scale",    glm::value_ptr(scale), 0.1f);
+        bool changed = false;
+        changed |= ImGui::DragFloat3("Position", glm::value_ptr(position), 0.1f);
+        changed |= ImGui::DragFloat3("Rotation", glm::value_ptr(euler), 1.0f);
+        changed |= ImGui::DragFloat3("Scale",    glm::value_ptr(scale), 0.1f);
 
-    if (changed) {
-        glm::mat4 t = glm::translate(glm::mat4(1.0f), position);
-        t *= glm::mat4_cast(glm::quat(glm::radians(euler)));
-        t = glm::scale(t, scale);
-        selected->transform = t;
-    }
-
-    // Color picker
-    if (auto* base = dynamic_cast<BaseObject*>(selected)) {
-        glm::vec4 col = base->GetColor();
-        if (ImGui::ColorEdit4("Color", glm::value_ptr(col))) {
-            base->SetColor(col);
+        if (changed) {
+            glm::mat4 t = glm::translate(glm::mat4(1.0f), position);
+            t *= glm::mat4_cast(glm::quat(glm::radians(euler)));
+            t = glm::scale(t, scale);
+            selected->transform = t;
         }
-        ImGui::Separator();
     }
 
-    // Shape properties
-    auto props = selected->GetProperties();
-    if (!props.empty()) {
-        ImGui::Text("Shape Properties");
+    // --- Dynamic Properties Section ---
+    const auto& props = selected->GetProperties();
+    if (!props.empty() && ImGui::CollapsingHeader("Object Properties", ImGuiTreeNodeFlags_DefaultOpen)) {
         bool propChanged = false;
-        for (auto& p : props) {
-            if (p.value) {
-                propChanged |= ImGui::DragFloat(p.name.c_str(), p.value, 0.05f);
+        for (const auto& p : props) {
+            switch (p.type) {
+                case PropertyType::Float:
+                    propChanged |= ImGui::DragFloat(p.name.c_str(), static_cast<float*>(p.value_ptr), 0.05f);
+                    break;
+                case PropertyType::Vec3:
+                    propChanged |= ImGui::DragFloat3(p.name.c_str(), glm::value_ptr(*static_cast<glm::vec3*>(p.value_ptr)), 0.05f);
+                    break;
+                case PropertyType::Color_Vec4:
+                    propChanged |= ImGui::ColorEdit4(p.name.c_str(), glm::value_ptr(*static_cast<glm::vec4*>(p.value_ptr)));
+                    break;
             }
         }
         if (propChanged) {
             selected->RebuildMesh();
         }
     }
-
+    
     ImGui::End();
 }
-

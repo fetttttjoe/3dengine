@@ -10,8 +10,8 @@ class Scene;
 class Camera;
 class UI;
 class SceneObjectFactory;
-class TransformGizmo; // New
-class ISceneObject;   // New
+class TransformGizmo;
+class ISceneObject;
 struct GLFWwindow;
 
 class Application {
@@ -19,6 +19,9 @@ public:
     Application(int initialWidth = 1280, int initialHeight = 720);
     ~Application();
     void Run();
+
+    int GetWindowWidth() const { return m_WindowWidth; }
+    int GetWindowHeight() const { return m_WindowHeight; }
 
 private:
     void Initialize();
@@ -44,11 +47,11 @@ private:
     std::unique_ptr<Camera> m_Camera;
     std::unique_ptr<UI> m_UI;
     std::unique_ptr<SceneObjectFactory> m_ObjectFactory;
-    std::unique_ptr<TransformGizmo> m_TransformGizmo; // New gizmo system
+    std::unique_ptr<TransformGizmo> m_TransformGizmo;
 
     // Input state
     bool m_IsDraggingObject = false;
-    bool m_IsDraggingGizmo = false; // New state for gizmo dragging
+    bool m_IsDraggingGizmo = false;
     ISceneObject* m_DraggedObject = nullptr;
     glm::vec2 m_LastMousePos;
     

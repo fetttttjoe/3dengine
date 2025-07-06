@@ -1,9 +1,9 @@
 #include "Core/Camera.h"
 #include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/matrix_inverse.hpp>
 #include <GLFW/glfw3.h>
 #include <iostream>
 
-// Constructor and other methods from your file remain the same...
 Camera::Camera(GLFWwindow *window, glm::vec3 position) : m_Window(window),
                                                          m_Position(position),
                                                          m_WorldUp(0.0f, 1.0f, 0.0f),
@@ -82,28 +82,34 @@ void Camera::SetAspectRatio(float aspectRatio)
     }
 }
 
-glm::vec3 Camera::WorldToScreenDirection(const glm::vec3 &worldDir) const
-{
+glm::vec2 Camera::WorldToScreen(const glm::vec3& worldPos, int windowWidth, int windowHeight) const {
     glm::mat4 vp = m_ProjectionMatrix * m_ViewMatrix;
+    glm::vec4 clipPos = vp * glm::vec4(worldPos, 1.0f);
 
-    // Use two points to define the direction vector in world space
-    glm::vec4 p1_world = glm::vec4(m_Position, 1.0f);
-    glm::vec4 p2_world = glm::vec4(m_Position + worldDir, 1.0f);
+    // Perspective divide to get Normalized Device Coordinates (NDC)
+    glm::vec3 ndcPos = glm::vec3(clipPos) / clipPos.w;
 
-    // Transform to clip space
-    glm::vec4 p1_clip = vp * p1_world;
-    glm::vec4 p2_clip = vp * p2_world;
+    // Convert NDC [-1, 1] to screen coordinates [0, width/height]
+    float screenX = (ndcPos.x + 1.0f) / 2.0f * windowWidth;
+    // Invert Y because screen coordinates usually have (0,0) at the top-left
+    float screenY = (1.0f - ndcPos.y) / 2.0f * windowHeight;
 
-    // Perspective divide to get Normalized Device Coordinates
-    glm::vec3 p1_ndc = glm::vec3(p1_clip) / p1_clip.w;
-    glm::vec3 p2_ndc = glm::vec3(p2_clip) / p2_clip.w;
-
-    // Get the direction vector in NDC space and flip Y
-    glm::vec3 screenDir = p2_ndc - p1_ndc;
-    screenDir.y = -screenDir.y;
-
-    return screenDir;
+    return glm::vec2(screenX, screenY);
 }
+
+glm::vec3 Camera::ScreenToWorldPoint(const glm::vec2& screenPos, float depth, int windowWidth, int windowHeight) const {
+    // Convert screen coordinates [0, width/height] to NDC [-1, 1]
+    float ndcX = (screenPos.x / windowWidth) * 2.0f - 1.0f;
+    float ndcY = 1.0f - (screenPos.y / windowHeight) * 2.0f; // Invert Y
+    
+    // We can use the object's depth in view space to construct the point
+    // This isn't a general purpose ray, but works for dragging on a plane
+    glm::mat4 invVP = glm::inverse(m_ProjectionMatrix * m_ViewMatrix);
+    glm::vec4 worldPos = invVP * glm::vec4(ndcX, ndcY, depth, 1.0f);
+
+    return glm::vec3(worldPos) / worldPos.w;
+}
+
 
 void Camera::updateMatrices()
 {
