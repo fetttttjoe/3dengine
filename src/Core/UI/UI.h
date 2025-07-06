@@ -1,4 +1,3 @@
-// Core/UI/UI.h
 #pragma once
 
 #include <string>
@@ -33,7 +32,7 @@ private:
     void DrawSceneOutliner();
     void DrawPropertiesPanel();
 
-    Scene*              m_Scene;
+    Scene* m_Scene;
     SceneObjectFactory* m_Factory;
 
     // For inline renaming in the outliner

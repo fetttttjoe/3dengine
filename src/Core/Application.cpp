@@ -1,5 +1,5 @@
 #include "Core/Application.h"
-#include "Core/ResourceManager.h" // New
+#include "Core/ResourceManager.h" 
 #include "Renderer/OpenGLRenderer.h"
 #include "Scene/Scene.h"
 #include "Core/Camera.h"
@@ -78,8 +78,8 @@ void Application::Initialize()
   m_UI->SetObjectFactory(m_ObjectFactory.get());
 
   m_Scene->AddObject(m_ObjectFactory->Create("Grid"));
-  m_Scene->AddObject(m_ObjectFactory->Create("Triangle"));
   m_Scene->AddObject(m_ObjectFactory->Create("Pyramid"));
+  m_Scene->AddObject(m_ObjectFactory->Create("Triangle"));
 }
 
 void Application::RegisterObjectTypes()
@@ -202,10 +202,22 @@ void Application::processMouseInput()
       m_TransformGizmo->SetTarget(currentSelected);
     }
 
-    if (currentSelected && !dynamic_cast<Grid *>(currentSelected))
+    if (currentSelected && currentSelected->isSelectable)
     {
       m_IsDraggingObject = true;
       m_DraggedObject = currentSelected;
+
+      // FIX: Calculate the object's depth in NDC space and store it.
+      // This ensures we move the object on a plane parallel to the screen,
+      // preventing it from jumping towards the camera.
+      glm::mat4 viewProjection = m_Camera->GetProjectionMatrix() * m_Camera->GetViewMatrix();
+      glm::vec4 clipPos = viewProjection * glm::vec4(m_DraggedObject->GetPosition(), 1.0f);
+      if (clipPos.w != 0.0f) {
+          m_DragNDCDepth = clipPos.z / clipPos.w;
+      } else {
+          m_DragNDCDepth = 0.0f; // Fallback
+      }
+
     } else {
       m_IsDraggingObject = false;
       m_DraggedObject = nullptr;
@@ -241,10 +253,10 @@ void Application::cursor_position_callback(GLFWwindow *window, double xpos, doub
   // --- OBJECT DRAGGING LOGIC ---
   else if (app->m_IsDraggingObject && app->m_DraggedObject)
   {
-    // Simplified dragging on a plane facing the camera at the object's distance
-    glm::vec3 objectWorldPos = app->m_DraggedObject->GetPosition();
-    float distance = glm::length(app->m_Camera->GetPosition() - objectWorldPos);
-    glm::vec3 newWorldPos = app->m_Camera->ScreenToWorldPoint(currentMousePos, distance, app->m_WindowWidth, app->m_WindowHeight);
+    // FIX: Use the constant NDC depth calculated when the drag started.
+    // This correctly unprojects the mouse cursor onto the plane the object was on,
+    // resulting in smooth, intuitive movement.
+    glm::vec3 newWorldPos = app->m_Camera->ScreenToWorldPoint(currentMousePos, app->m_DragNDCDepth, app->m_WindowWidth, app->m_WindowHeight);
     
     app->m_DraggedObject->SetPosition(newWorldPos);
   }

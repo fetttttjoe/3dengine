@@ -9,6 +9,7 @@
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
+#include "imgui_stdlib.h" // This header provides the std::string overload for ImGui::InputText
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/matrix_decompose.hpp>
 #include <glm/gtc/quaternion.hpp>
@@ -112,58 +113,59 @@ void UI::DrawSceneOutliner() {
 
         const auto& objects = m_Scene->GetSceneObjects();
         for (const auto& objPtr : objects) {
-            if (dynamic_cast<Grid*>(objPtr.get())) continue;
+            if (!objPtr->isSelectable) continue;
 
             uint32_t oid = objPtr->id;
             ImGui::PushID(oid);
+
             ImGui::TableNextRow();
             ImGui::TableNextColumn();
 
-            // Inline rename vs selectable
             if (oid == m_RenameID) {
                 ImGui::PushItemWidth(-1);
-                char buf[256];
-                std::strncpy(buf, m_RenameBuffer.c_str(), sizeof(buf));
-                buf[sizeof(buf)-1] = '\0';
-                if (ImGui::InputText("##rename", buf, sizeof(buf), ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll)) {
-                    objPtr->name = buf;
+                
+                if (ImGui::InputText("##rename", &m_RenameBuffer, ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll)) {
+                    objPtr->name = m_RenameBuffer;
                     m_RenameID = 0;
                 }
                 ImGui::PopItemWidth();
             } else {
                 bool isSelected = (objPtr.get() == m_Scene->GetSelectedObject());
-                if (ImGui::Selectable(objPtr->name.c_str(), isSelected, ImGuiSelectableFlags_SpanAllColumns)) {
+                if (ImGui::Selectable(objPtr->name.c_str(), isSelected)) {
                     m_Scene->SetSelectedObjectByID(oid);
                 }
             }
+            
+            std::string rename_label = "Rename##" + std::to_string(oid);
+            std::string ok_label = "OK##" + std::to_string(oid);
+            std::string cancel_label = "Cancel##" + std::to_string(oid);
+            std::string duplicate_label = "Duplicate##" + std::to_string(oid);
+            std::string delete_label = "Delete##" + std::to_string(oid);
 
-            // Rename button or OK/Cancel
             ImGui::TableNextColumn();
             if (oid != m_RenameID) {
-                if (ImGui::Button("Rename")) {
+                if (ImGui::Button(rename_label.c_str())) {
                     m_RenameID = oid;
                     m_RenameBuffer = objPtr->name;
                 }
             } else {
-                if (ImGui::Button("OK")) {
+                if (ImGui::Button(ok_label.c_str())) {
                     objPtr->name = m_RenameBuffer;
                     m_RenameID = 0;
                 }
                 ImGui::SameLine();
-                if (ImGui::Button("Cancel")) {
+                if (ImGui::Button(cancel_label.c_str())) {
                     m_RenameID = 0;
                 }
             }
 
-            // Duplicate button
             ImGui::TableNextColumn();
-            if (ImGui::Button("Duplicate")) {
+            if (ImGui::Button(duplicate_label.c_str())) {
                 idToDuplicate = oid;
             }
 
-            // Delete button
             ImGui::TableNextColumn();
-            if (ImGui::Button("Delete")) {
+            if (ImGui::Button(delete_label.c_str())) {
                 idToDelete = oid;
             }
             ImGui::PopID();
@@ -200,46 +202,47 @@ void UI::DrawPropertiesPanel() {
     ImGui::Text("ID: %u", selected->id);
     ImGui::Separator();
 
-    // --- Transform Section ---
-    if (ImGui::CollapsingHeader("Transform", ImGuiTreeNodeFlags_DefaultOpen)) {
+    if (ImGui::CollapsingHeader("Properties", ImGuiTreeNodeFlags_DefaultOpen)) {
+        // --- Transform Properties (handled first as they are fundamental) ---
         glm::vec3 position, scale, skew;
         glm::quat rotation;
         glm::vec4 perspective;
         glm::decompose(selected->transform, scale, rotation, position, skew, perspective);
         glm::vec3 euler = glm::degrees(glm::eulerAngles(rotation));
 
-        bool changed = false;
-        changed |= ImGui::DragFloat3("Position", glm::value_ptr(position), 0.1f);
-        changed |= ImGui::DragFloat3("Rotation", glm::value_ptr(euler), 1.0f);
-        changed |= ImGui::DragFloat3("Scale",    glm::value_ptr(scale), 0.1f);
+        bool transformChanged = false;
+        transformChanged |= ImGui::DragFloat3("Position", glm::value_ptr(position), 0.1f);
+        transformChanged |= ImGui::DragFloat3("Rotation", glm::value_ptr(euler), 1.0f);
+        transformChanged |= ImGui::DragFloat3("Scale",    glm::value_ptr(scale), 0.1f);
 
-        if (changed) {
+        if (transformChanged) {
             glm::mat4 t = glm::translate(glm::mat4(1.0f), position);
             t *= glm::mat4_cast(glm::quat(glm::radians(euler)));
             t = glm::scale(t, scale);
             selected->transform = t;
         }
-    }
 
-    // --- Dynamic Properties Section ---
-    const auto& props = selected->GetProperties();
-    if (!props.empty() && ImGui::CollapsingHeader("Object Properties", ImGuiTreeNodeFlags_DefaultOpen)) {
-        bool propChanged = false;
-        for (const auto& p : props) {
-            switch (p.type) {
-                case PropertyType::Float:
-                    propChanged |= ImGui::DragFloat(p.name.c_str(), static_cast<float*>(p.value_ptr), 0.05f);
-                    break;
-                case PropertyType::Vec3:
-                    propChanged |= ImGui::DragFloat3(p.name.c_str(), glm::value_ptr(*static_cast<glm::vec3*>(p.value_ptr)), 0.05f);
-                    break;
-                case PropertyType::Color_Vec4:
-                    propChanged |= ImGui::ColorEdit4(p.name.c_str(), glm::value_ptr(*static_cast<glm::vec4*>(p.value_ptr)));
-                    break;
+        // --- Other Dynamic Properties (seamlessly drawn after transform) ---
+        const auto& props = selected->GetProperties();
+        if (!props.empty()) {
+            ImGui::Separator(); 
+            bool propChanged = false;
+            for (const auto& p : props) {
+                switch (p.type) {
+                    case PropertyType::Float:
+                        propChanged |= ImGui::DragFloat(p.name.c_str(), static_cast<float*>(p.value_ptr), 0.05f);
+                        break;
+                    case PropertyType::Vec3:
+                        propChanged |= ImGui::DragFloat3(p.name.c_str(), glm::value_ptr(*static_cast<glm::vec3*>(p.value_ptr)), 0.05f);
+                        break;
+                    case PropertyType::Color_Vec4:
+                        propChanged |= ImGui::ColorEdit4(p.name.c_str(), glm::value_ptr(*static_cast<glm::vec4*>(p.value_ptr)));
+                        break;
+                }
             }
-        }
-        if (propChanged) {
-            selected->RebuildMesh();
+            if (propChanged) {
+                selected->RebuildMesh();
+            }
         }
     }
     

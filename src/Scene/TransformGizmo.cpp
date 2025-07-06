@@ -96,7 +96,8 @@ void TransformGizmo::SetTarget(ISceneObject* target) {
 void TransformGizmo::CreateHandles() {
     uint32_t currentId = GIZMO_ID_START;
     
-    // Create handles if the corresponding dimension property exists
+    // BUG FIX: Only create handles for dimensions that were successfully found.
+    // This makes the gizmo correctly support objects that might not have all three dimensions (like a 2D triangle).
     if (m_DimensionPointers.count(GizmoDimension::WIDTH)) {
         m_Handles.push_back({currentId++, {1.0f, 0.0f, 0.0f}, {1, 0, 0, 1}, GizmoDimension::WIDTH, 1.0f});
         m_Handles.push_back({currentId++, {-1.0f, 0.0f, 0.0f}, {1, 0, 0, 1}, GizmoDimension::WIDTH, -1.0f});
@@ -105,7 +106,8 @@ void TransformGizmo::CreateHandles() {
         m_Handles.push_back({currentId++, {0.0f, 1.0f, 0.0f}, {0, 1, 0, 1}, GizmoDimension::HEIGHT, 1.0f});
         m_Handles.push_back({currentId++, {0.0f, -1.0f, 0.0f}, {0, 1, 0, 1}, GizmoDimension::HEIGHT, -1.0f});
     }
-    if (m_DimensionPointers.count(GizmoDimension::DEPTH)) {
+    // A triangle has 0 depth, so a depth handle is not useful. We also check if the pointer exists.
+    if (m_DimensionPointers.count(GizmoDimension::DEPTH) && *m_DimensionPointers[GizmoDimension::DEPTH] > 0.0f) {
         m_Handles.push_back({currentId++, {0.0f, 0.0f, 1.0f}, {0, 0, 1, 1}, GizmoDimension::DEPTH, 1.0f});
         m_Handles.push_back({currentId++, {0.0f, 0.0f, -1.0f}, {0, 0, 1, 1}, GizmoDimension::DEPTH, -1.0f});
     }
@@ -176,7 +178,9 @@ void TransformGizmo::Draw(const Camera& camera) {
 
     // Scale handles based on distance to camera to maintain a constant screen size
     float distance = glm::length(camera.GetPosition() - m_Target->GetPosition());
-    float scale = distance * 0.05f; 
+    
+    // FIX: Reduced the scaling factor to make the gizmo handles smaller and less obtrusive.
+    float scale = distance * 0.02f; 
 
     glDisable(GL_DEPTH_TEST);
     glBindVertexArray(m_VAO);
@@ -185,9 +189,9 @@ void TransformGizmo::Draw(const Camera& camera) {
         m_Shader->SetUniformVec4("u_Color", handle.color);
         
         // Calculate handle world position based on object's transform and dimensions
-        float w = *m_DimensionPointers[GizmoDimension::WIDTH] * 0.5f;
-        float h = *m_DimensionPointers[GizmoDimension::HEIGHT] * 0.5f;
-        float d = *m_DimensionPointers[GizmoDimension::DEPTH] * 0.5f;
+        float w = m_DimensionPointers.count(GizmoDimension::WIDTH) ? *m_DimensionPointers.at(GizmoDimension::WIDTH) * 0.5f : 0.f;
+        float h = m_DimensionPointers.count(GizmoDimension::HEIGHT) ? *m_DimensionPointers.at(GizmoDimension::HEIGHT) * 0.5f : 0.f;
+        float d = m_DimensionPointers.count(GizmoDimension::DEPTH) ? *m_DimensionPointers.at(GizmoDimension::DEPTH) * 0.5f : 0.f;
 
         glm::vec3 handlePosLocal = {
             handle.basePosition.x * w,
@@ -219,17 +223,20 @@ void TransformGizmo::DrawForPicking(const Camera& camera, Shader& pickingShader)
     pickingShader.SetUniformMat4f("u_Projection", camera.GetProjectionMatrix());
 
     float distance = glm::length(camera.GetPosition() - m_Target->GetPosition());
-    float scale = distance * 0.05f; 
+    
+    // FIX: Reduced the scaling factor to match the visual size in the Draw() method.
+    // This ensures the clickable area is consistent with what the user sees.
+    float scale = distance * 0.02f; 
 
     glBindVertexArray(m_VAO);
 
     for (const auto& handle : m_Handles) {
         pickingShader.SetUniform1ui("u_ObjectID", handle.id);
 
-        float w = *m_DimensionPointers[GizmoDimension::WIDTH]  * 0.5f;
-        float h = *m_DimensionPointers[GizmoDimension::HEIGHT] * 0.5f;
-        float d = *m_DimensionPointers[GizmoDimension::DEPTH]  * 0.5f;
-        
+        float w = m_DimensionPointers.count(GizmoDimension::WIDTH) ? *m_DimensionPointers.at(GizmoDimension::WIDTH) * 0.5f : 0.f;
+        float h = m_DimensionPointers.count(GizmoDimension::HEIGHT) ? *m_DimensionPointers.at(GizmoDimension::HEIGHT) * 0.5f : 0.f;
+        float d = m_DimensionPointers.count(GizmoDimension::DEPTH) ? *m_DimensionPointers.at(GizmoDimension::DEPTH) * 0.5f : 0.f;
+
         glm::vec3 handlePosLocal = {
             handle.basePosition.x * w,
             handle.basePosition.y * h,

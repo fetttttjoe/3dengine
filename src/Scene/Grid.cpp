@@ -12,6 +12,12 @@ Grid::Grid(int size, int divisions) {
     name = "Grid";
     m_Shader = ResourceManager::LoadShader("grid_shader", "shaders/default.vert", "shaders/default.frag");
 
+    // IMPROVEMENT: Set behavioral flags in the constructor. This makes the Grid's
+    // special status (not selectable, rendered statically) a property of the object
+    // itself, rather than requiring special checks elsewhere in the code.
+    isSelectable = false;
+    isStatic = true;
+
     std::vector<float> vertices;
     float step = (float)size / divisions;
     float halfSize = (float)size / 2.0f;
@@ -58,7 +64,7 @@ void Grid::Draw(const glm::mat4& view, const glm::mat4& projection) {
 }
 
 void Grid::DrawForPicking(Shader& pickingShader, const glm::mat4& view, const glm::mat4& projection) {
-    // Grid is not pickable.
+    // Grid is not pickable, this is now enforced by the isSelectable flag.
 }
 
 void Grid::DrawHighlight(const glm::mat4& view, const glm::mat4& projection) const {
@@ -69,7 +75,7 @@ std::string Grid::GetTypeString() const {
     return "Grid";
 }
 
-// FIX: Implement the missing GetProperties function.
+// The grid has no user-editable properties.
 const std::vector<ObjectProperty>& Grid::GetProperties() const {
     return m_Properties;
 }

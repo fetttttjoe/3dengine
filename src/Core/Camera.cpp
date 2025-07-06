@@ -97,16 +97,19 @@ glm::vec2 Camera::WorldToScreen(const glm::vec3& worldPos, int windowWidth, int 
     return glm::vec2(screenX, screenY);
 }
 
-glm::vec3 Camera::ScreenToWorldPoint(const glm::vec2& screenPos, float depth, int windowWidth, int windowHeight) const {
+// IMPROVEMENT: Renamed 'depth' parameter to 'ndcZ' for clarity.
+glm::vec3 Camera::ScreenToWorldPoint(const glm::vec2& screenPos, float ndcZ, int windowWidth, int windowHeight) const {
     // Convert screen coordinates [0, width/height] to NDC [-1, 1]
     float ndcX = (screenPos.x / windowWidth) * 2.0f - 1.0f;
     float ndcY = 1.0f - (screenPos.y / windowHeight) * 2.0f; // Invert Y
     
-    // We can use the object's depth in view space to construct the point
-    // This isn't a general purpose ray, but works for dragging on a plane
+    // Unproject the NDC point back to world space
     glm::mat4 invVP = glm::inverse(m_ProjectionMatrix * m_ViewMatrix);
-    glm::vec4 worldPos = invVP * glm::vec4(ndcX, ndcY, depth, 1.0f);
+    glm::vec4 worldPos = invVP * glm::vec4(ndcX, ndcY, ndcZ, 1.0f);
 
+    // The result of the multiplication is in homogeneous coordinates,
+    // so we must perform the perspective divide to get the final 3D point.
+    if (worldPos.w == 0.0f) return glm::vec3(0.0f); // Avoid division by zero
     return glm::vec3(worldPos) / worldPos.w;
 }
 
