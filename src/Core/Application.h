@@ -54,6 +54,7 @@ private:
     bool m_IsDraggingGizmo = false;
     ISceneObject* m_DraggedObject = nullptr;
     glm::vec2 m_LastMousePos;
+    float m_DragNDCDepth = 0.0f;
     
     bool m_StaticCacheDirty = true;
 };

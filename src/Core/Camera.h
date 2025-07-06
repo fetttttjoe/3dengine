@@ -20,7 +20,10 @@ public:
     
     // Helpers to convert between world and screen coordinates
     glm::vec2 WorldToScreen(const glm::vec3& worldPos, int windowWidth, int windowHeight) const;
-    glm::vec3 ScreenToWorldPoint(const glm::vec2& screenPos, float depth, int windowWidth, int windowHeight) const;
+    
+    // IMPROVEMENT: Renamed 'depth' parameter to 'ndcZ' for clarity. It expects a
+    // depth value in Normalized Device Coordinates [-1, 1], not world units.
+    glm::vec3 ScreenToWorldPoint(const glm::vec2& screenPos, float ndcZ, int windowWidth, int windowHeight) const;
 
 private:
     void updateMatrices();

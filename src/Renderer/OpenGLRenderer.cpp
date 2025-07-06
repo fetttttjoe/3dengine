@@ -73,9 +73,10 @@ void OpenGLRenderer::RenderStaticScene(const Scene& scene, const Camera& camera)
     const auto& view = camera.GetViewMatrix();
     const auto& projection = camera.GetProjectionMatrix();
     
-    // Render only static objects (like the Grid) to this cache
+    // IMPROVEMENT: Render objects to the static cache based on the `isStatic` flag,
+    // not by checking their type. This is more flexible.
     for (const auto& object : scene.GetSceneObjects()) {
-        if (dynamic_cast<Grid*>(object.get())) {
+        if (object->isStatic) {
             object->Draw(view, projection);
         }
     }
@@ -97,9 +98,9 @@ void OpenGLRenderer::RenderDynamicScene(const Scene& scene, const Camera& camera
     const auto& view = camera.GetViewMatrix();
     const auto& projection = camera.GetProjectionMatrix();
 
-    // Render non-static objects
+    // IMPROVEMENT: Render non-static objects based on the `isStatic` flag.
     for (const auto& object : scene.GetSceneObjects()) {
-        if (!dynamic_cast<Grid*>(object.get())) {
+        if (!object->isStatic) {
             object->Draw(view, projection);
         }
     }
@@ -129,8 +130,9 @@ uint32_t OpenGLRenderer::ProcessPicking(int x, int y, const Scene& scene, const 
     const auto& view = camera.GetViewMatrix();
     const auto& projection = camera.GetProjectionMatrix();
 
+    // IMPROVEMENT: Only draw selectable objects into the picking buffer.
     for (const auto& object : scene.GetSceneObjects()) {
-        if (!dynamic_cast<Grid*>(object.get())) {
+        if (object->isSelectable) {
             object->DrawForPicking(*m_PickingShader, view, projection);
         }
     }

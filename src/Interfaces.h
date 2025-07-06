@@ -71,7 +71,6 @@ public:
   }
   virtual void SetPosition(const glm::vec3 &newPos)
   {
-    // FIX: The 'position' variable was missing from the decompose call.
     glm::vec3 position, scale, skew;
     glm::quat rotation;
     glm::vec4 perspective;
@@ -102,4 +101,6 @@ public:
   glm::mat4 transform;
   std::string name;
   bool isSelected;
+  bool isSelectable = true;
+  bool isStatic = false;
 };
