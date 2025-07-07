@@ -1,24 +1,24 @@
 // AppUI.cpp
-#include "Core/UI/AppUI.h"  //
+#include "Core/UI/AppUI.h"
 
-#include <backends/imgui_impl_glfw.h>     //
-#include <backends/imgui_impl_opengl3.h>  //
-#include <imgui.h>                        //
-#include <imgui_stdlib.h>                 //
+#include <backends/imgui_impl_glfw.h>
+#include <backends/imgui_impl_opengl3.h>
+#include <imgui.h>
+#include <imgui_stdlib.h>
 
-#include <algorithm>             //
-#include <glm/gtc/type_ptr.hpp>  //
+#include <algorithm>
+#include <glm/gtc/type_ptr.hpp>
 
-#include "Core/Application.h"              //
-#include "Core/Log.h"                      //
-#include "Core/PropertyNames.h"            //
-#include "Core/SettingsManager.h"          //
-#include "Core/UI/UIElements.h"            //
-#include "Factories/SceneObjectFactory.h"  //
-#include "Scene/Grid.h"                    //
-#include "Scene/Objects/ObjectTypes.h"     //
-#include "Scene/Scene.h"                   //
-#include "Scene/TransformGizmo.h"          //
+#include "Core/Application.h"
+#include "Core/Log.h"
+#include "Core/PropertyNames.h"
+#include "Core/SettingsManager.h"
+#include "Core/UI/UIElements.h"
+#include "Factories/SceneObjectFactory.h"
+#include "Scene/Grid.h"
+#include "Scene/Objects/ObjectTypes.h"
+#include "Scene/Scene.h"
+#include "Scene/TransformGizmo.h"
 
 //-----------------------------------------------------------------------------
 // Internal helpers: Generic Splitter
