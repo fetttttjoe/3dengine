@@ -8,7 +8,7 @@ set(CMAKE_POLICY_VERSION_MINIMUM 3.5 CACHE INTERNAL "")
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# FetchContent support
+# FetchContent support for managing dependencies
 include(FetchContent)
 
 # --- GLFW ---
@@ -19,7 +19,7 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(glfw)
 
-# --- GLAD v0.1.36 ---
+# --- GLAD (OpenGL Loading Library) ---
 FetchContent_Declare(
   glad
   GIT_REPOSITORY https://github.com/Dav1dde/glad.git
@@ -27,7 +27,7 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(glad)
 
-# --- GLM ---
+# --- GLM (OpenGL Mathematics) ---
 FetchContent_Declare(
   glm
   GIT_REPOSITORY https://github.com/g-truc/glm.git
@@ -35,11 +35,10 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(glm)
 
-# --- ImGui ---
+# --- ImGui (Immediate Mode GUI) ---
 FetchContent_Declare(
   imgui
   GIT_REPOSITORY https://github.com/ocornut/imgui.git
-  # CORRECTED: Using the modern version from your original project
   GIT_TAG        v1.92.0
 )
 FetchContent_MakeAvailable(imgui)
@@ -80,7 +79,6 @@ target_include_directories(IntuitiveModeler PRIVATE
   ${imgui_SOURCE_DIR}
   ${imgui_SOURCE_DIR}/backends
   ${imgui_SOURCE_DIR}/misc/cpp
-  # Add json include path
   ${nlohmann_json_SOURCE_DIR}/include
 )
 target_compile_definitions(IntuitiveModeler PRIVATE
