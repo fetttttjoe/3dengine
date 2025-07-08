@@ -1,5 +1,5 @@
-# The original, working versioning is restored.
-cmake_minimum_required(VERSION 4.1)
+# Use a standard, widely available CMake version
+cmake_minimum_required(VERSION 3.16)
 project(IntuitiveModeler VERSION 1.0)
 set(CMAKE_POLICY_VERSION_MINIMUM 3.5 CACHE INTERNAL "")
 
@@ -25,7 +25,6 @@ if(MSVC)
 endif()
 
 # --- Core Engine Library ---
-# This is the necessary change: Create a library with all source files EXCEPT main.cpp
 file(GLOB_RECURSE ENGINE_SOURCES CONFIGURE_DEPENDS "src/*.cpp")
 list(FILTER ENGINE_SOURCES EXCLUDE REGEX ".*/main.cpp$")
 
