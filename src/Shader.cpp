@@ -4,13 +4,12 @@
 
 #include <fstream>
 #include <glm/gtc/type_ptr.hpp>
-#include <iostream>
 #include <sstream>
 #include <vector>
 
 #include "Core/Log.h"
 
-Shader::Shader(const std::string &vp, const std::string &fp) : m_RendererID(0) {
+Shader::Shader(const std::string& vp, const std::string& fp) : m_RendererID(0) {
   auto vsSrc = loadShaderSource(vp);
   auto fsSrc = loadShaderSource(fp);
   if (!vsSrc.empty() && !fsSrc.empty()) {
@@ -18,7 +17,7 @@ Shader::Shader(const std::string &vp, const std::string &fp) : m_RendererID(0) {
   }
 }
 
-Shader::Shader(const char *vertexSource, const char *fragmentSource,
+Shader::Shader(const char* vertexSource, const char* fragmentSource,
                bool fromMemory)
     : m_RendererID(0) {
   if (vertexSource && fragmentSource) {
@@ -35,47 +34,48 @@ void Shader::Bind() const {
 }
 void Shader::Unbind() const { glUseProgram(0); }
 
-void Shader::SetUniform1ui(const std::string &name, uint32_t value) {
+void Shader::SetUniform1ui(const std::string& name, uint32_t value) {
   glUniform1ui(getUniformLocation(name), value);
 }
-void Shader::SetUniform1i(const std::string &name, int value) {
+void Shader::SetUniform1i(const std::string& name, int value) {
   glUniform1i(getUniformLocation(name), value);
 }
-void Shader::SetUniform1f(const std::string &name, float value) {
+void Shader::SetUniform1f(const std::string& name, float value) {
   glUniform1f(getUniformLocation(name), value);
 }
-void Shader::SetUniform3f(const std::string &name, float v0, float v1,
+void Shader::SetUniform3f(const std::string& name, float v0, float v1,
                           float v2) {
   glUniform3f(getUniformLocation(name), v0, v1, v2);
 }
-void Shader::SetUniform4f(const std::string &name, float v0, float v1, float v2,
+void Shader::SetUniform4f(const std::string& name, float v0, float v1, float v2,
                           float v3) {
   glUniform4f(getUniformLocation(name), v0, v1, v2, v3);
 }
-void Shader::SetUniformMat4f(const std::string &name, const glm::mat4 &m) {
+void Shader::SetUniformMat4f(const std::string& name, const glm::mat4& m) {
   glUniformMatrix4fv(getUniformLocation(name), 1, GL_FALSE, glm::value_ptr(m));
 }
 
-void Shader::SetUniformVec3(const std::string &name, const glm::vec3 &v) {
+void Shader::SetUniformVec3(const std::string& name, const glm::vec3& v) {
   SetUniform3f(name, v.x, v.y, v.z);
 }
-void Shader::SetUniformVec4(const std::string &name, const glm::vec4 &v) {
+void Shader::SetUniformVec4(const std::string& name, const glm::vec4& v) {
   SetUniform4f(name, v.x, v.y, v.z, v.w);
 }
 
-int Shader::getUniformLocation(const std::string &name) {
+int Shader::getUniformLocation(const std::string& name) {
   if (m_UniformLocationCache.count(name)) {
     return m_UniformLocationCache[name];
   }
   int loc = glGetUniformLocation(m_RendererID, name.c_str());
   if (loc == -1) {
+    // This warning is useful for debugging shaders.
     Log::Debug("Warning: uniform '", name, "' doesn't exist or is not active.");
   }
   m_UniformLocationCache[name] = loc;
   return loc;
 }
 
-std::string Shader::loadShaderSource(const std::string &filepath) {
+std::string Shader::loadShaderSource(const std::string& filepath) {
   std::ifstream in(filepath);
   if (!in.is_open()) {
     Log::Debug("ERROR: Could not open shader file: ", filepath);
@@ -87,9 +87,9 @@ std::string Shader::loadShaderSource(const std::string &filepath) {
 }
 
 unsigned int Shader::compileShader(unsigned int type,
-                                   const std::string &source) {
+                                   const std::string& source) {
   unsigned int id = glCreateShader(type);
-  const char *src = source.c_str();
+  const char* src = source.c_str();
   glShaderSource(id, 1, &src, nullptr);
   glCompileShader(id);
 
@@ -107,8 +107,8 @@ unsigned int Shader::compileShader(unsigned int type,
   return id;
 }
 
-unsigned int Shader::createShaderProgram(const std::string &vs,
-                                         const std::string &fs) {
+unsigned int Shader::createShaderProgram(const std::string& vs,
+                                         const std::string& fs) {
   unsigned int prog = glCreateProgram();
   unsigned int v = compileShader(GL_VERTEX_SHADER, vs);
   unsigned int f = compileShader(GL_FRAGMENT_SHADER, fs);

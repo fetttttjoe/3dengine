@@ -6,7 +6,7 @@
 
 #include <glm/gtc/type_ptr.hpp>  // For glm::value_ptr
 
-#include "Core/PropertyNames.h"  // For PropertyNames::Position etc.
+#include "Core/PropertyNames.h"
 #include "Scene/Objects/ObjectTypes.h"
 #include "Scene/Scene.h"
 

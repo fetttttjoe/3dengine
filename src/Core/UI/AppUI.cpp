@@ -43,6 +43,12 @@ void AppUI::DrawSplitter(const char* id, float& valueToAdjust,
       valueToAdjust = std::clamp(valueToAdjust + mouse_delta_x, 100.0f,
                                  ImGui::GetWindowSize().x - 100.0f);
     }
+
+    if (strcmp(id, "split_left") == 0) {
+        SettingsManager::Get().leftPaneWidth = valueToAdjust;
+    } else if (strcmp(id, "split_right") == 0) {
+        SettingsManager::Get().rightPaneWidth = valueToAdjust;
+    }
   }
 
   ImVec2 min_pos = ImGui::GetItemRectMin();
@@ -62,11 +68,11 @@ AppUI::AppUI(Application* app)
       m_Scene(app->GetScene()),
       m_LeftPaneWidth(SettingsManager::Get().leftPaneWidth > 0
                           ? SettingsManager::Get().leftPaneWidth
-                          : 200.0f)  //
+                          : 200.0f)
       ,
       m_RightPaneWidth(SettingsManager::Get().rightPaneWidth > 0
                            ? SettingsManager::Get().rightPaneWidth
-                           : 300.0f)  //
+                           : 300.0f)
       ,
       m_MenuBar(std::make_unique<MenuBar>(app, app->GetScene(),
                                           app->GetObjectFactory())),
@@ -84,8 +90,7 @@ AppUI::AppUI(Application* app)
   m_MenuBar->OnSaveScene = [this]() { m_Scene->Save("scene.json"); };
   m_MenuBar->OnLoadScene = [this]() {
     m_Scene->Load("scene.json");
-    // Trigger the m_OnSceneLoadedHandler callback to notify Application
-    if (m_OnSceneLoadedHandler) m_OnSceneLoadedHandler();  // <-- CORRECTED CALL
+    if (m_OnSceneLoadedHandler) m_OnSceneLoadedHandler();
   };
   m_MenuBar->OnShowSettings = [this]() { m_ShowSettingsWindow = true; };
   m_MenuBar->OnShowAnchorsChanged = [this](bool show) {
@@ -124,8 +129,8 @@ AppUI::AppUI(Application* app)
 }
 
 AppUI::~AppUI() {
-  SettingsManager::Get().leftPaneWidth = m_LeftPaneWidth;    //
-  SettingsManager::Get().rightPaneWidth = m_RightPaneWidth;  //
+  SettingsManager::Get().leftPaneWidth = m_LeftPaneWidth;
+  SettingsManager::Get().rightPaneWidth = m_RightPaneWidth;
 }
 
 void AppUI::Initialize(GLFWwindow* window) {
@@ -173,9 +178,6 @@ void AppUI::EndFrame() {
 }
 
 void AppUI::SetObjectFactory(SceneObjectFactory* factory) {
-  // This method is now mostly redundant as factory is passed in constructor.
-  // If you add dynamic factory changes, you'd need to propagate this to
-  // MenuBar.
 }
 
 void AppUI::SetExitRequestHandler(std::function<void()> handler) {
@@ -186,10 +188,9 @@ void AppUI::SetResetCameraHandler(std::function<void()> handler) {
   m_ResetCameraHandler = std::move(handler);
 }
 
-// Added setter for the new OnSceneLoaded callback
 void AppUI::SetOnSceneLoadedHandler(
-    std::function<void()> handler) {            // <-- CORRECTED METHOD NAME
-  m_OnSceneLoadedHandler = std::move(handler);  // <-- CORRECTED MEMBER NAME
+    std::function<void()> handler) {
+  m_OnSceneLoadedHandler = std::move(handler);
 }
 
 void AppUI::ShowInspector() { m_ActiveRightTab = 1; }
