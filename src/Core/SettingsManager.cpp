@@ -1,61 +1,86 @@
 #include "Core/SettingsManager.h"
-
+#include "Core/Log.h"
+#include "nlohmann/json.hpp"
 #include <fstream>
 #include <iomanip>
 
-#include "nlohmann/json.hpp"
-
 AppSettings SettingsManager::s_Settings;
-std::vector<SettingDescriptor> SettingsManager::s_Descriptors;
+SettingsManager::ManagerData SettingsManager::s_ManagerData;
 SettingsManager::Registrar SettingsManager::s_Registrar;
 
 SettingsManager::Registrar::Registrar() {
-  // Register each setting in order
-  s_Descriptors.push_back({"cloneOffset", "Clone Offset", SettingType::Float3,
-                           &s_Settings.cloneOffset});
-  s_Descriptors.push_back({"leftPaneWidth", "Left Pane Width",
-                           SettingType::Float, &s_Settings.leftPaneWidth});
-  s_Descriptors.push_back({"rightPaneWidth", "Right Pane Width",
-                           SettingType::Float, &s_Settings.rightPaneWidth});
+    s_ManagerData.Descriptors = {
+        {"cloneOffset", "Clone Offset", SettingType::Float3, &s_Settings.cloneOffset},
+        {"leftPaneWidth", "Left Pane Width", SettingType::Float, &s_Settings.leftPaneWidth},
+        {"rightPaneWidth", "Right Pane Width", SettingType::Float, &s_Settings.rightPaneWidth}
+    };
+
+    for (const auto& desc : s_ManagerData.Descriptors) {
+        s_ManagerData.DescriptorMap[desc.key] = &desc;
+    }
 }
 
-AppSettings& SettingsManager::Get() { return s_Settings; }
-
-bool SettingsManager::Load(const std::string& path) {
-  std::ifstream in(path);
-  if (!in.is_open()) return false;
-  nlohmann::json j;
-  in >> j;
-
-  if (auto it = j.find("cloneOffset"); it != j.end() && it->is_object()) {
-    auto ptr = reinterpret_cast<glm::vec3*>(s_Descriptors[0].ptr);
-    ptr->x = (*it).value("x", ptr->x);
-    ptr->y = (*it).value("y", ptr->y);
-    ptr->z = (*it).value("z", ptr->z);
-  }
-  if (auto it = j.find("leftPaneWidth"); it != j.end())
-    s_Settings.leftPaneWidth = *it;
-  if (auto it = j.find("rightPaneWidth"); it != j.end())
-    s_Settings.rightPaneWidth = *it;
-
-  return true;
-}
-
-bool SettingsManager::Save(const std::string& path) {
-  nlohmann::json j;
-  {
-    auto ptr = reinterpret_cast<glm::vec3*>(s_Descriptors[0].ptr);
-    j["cloneOffset"] = {{"x", ptr->x}, {"y", ptr->y}, {"z", ptr->z}};
-  }
-  j["leftPaneWidth"] = s_Settings.leftPaneWidth;
-  j["rightPaneWidth"] = s_Settings.rightPaneWidth;
-
-  std::ofstream out(path);
-  if (!out.is_open()) return false;
-  out << std::setw(4) << j << std::endl;
-  return true;
+AppSettings& SettingsManager::Get() {
+    return s_Settings;
 }
 
 const std::vector<SettingDescriptor>& SettingsManager::GetDescriptors() {
-  return s_Descriptors;
+    return s_ManagerData.Descriptors;
+}
+
+bool SettingsManager::Load(const std::string& path) {
+    std::ifstream in(path);
+    if (!in.is_open()) {
+        return false;
+    }
+
+    try {
+        const nlohmann::json j = nlohmann::json::parse(in);
+
+        for (const auto& desc : GetDescriptors()) {
+            if (j.contains(desc.key)) {
+                const auto& jsonValue = j.at(desc.key);
+                switch (desc.type) {
+                    case SettingType::Float:
+                        *static_cast<float*>(desc.ptr) = jsonValue.get<float>();
+                        break;
+                    case SettingType::Float3:
+                        auto& vec = *static_cast<glm::vec3*>(desc.ptr);
+                        vec.x = jsonValue.value("x", vec.x);
+                        vec.y = jsonValue.value("y", vec.y);
+                        vec.z = jsonValue.value("z", vec.z);
+                        break;
+                }
+            }
+        }
+    } catch (const nlohmann::json::exception& e) {
+        Log::Debug("Failed to parse settings.json: ", e.what());
+        return false;
+    }
+
+    return true;
+}
+
+bool SettingsManager::Save(const std::string& path) {
+    nlohmann::json j;
+
+    for (const auto& desc : GetDescriptors()) {
+        switch (desc.type) {
+            case SettingType::Float:
+                j[desc.key] = *static_cast<const float*>(desc.ptr);
+                break;
+            case SettingType::Float3:
+                const auto& vec = *static_cast<const glm::vec3*>(desc.ptr);
+                j[desc.key] = {{"x", vec.x}, {"y", vec.y}, {"z", vec.z}};
+                break;
+        }
+    }
+
+    std::ofstream out(path);
+    if (!out.is_open()) {
+        return false;
+    }
+
+    out << std::setw(4) << j << std::endl;
+    return true;
 }
