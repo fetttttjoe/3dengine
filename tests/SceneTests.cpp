@@ -1,0 +1,155 @@
+#include "Factories/SceneObjectFactory.h"
+#include "Interfaces.h"
+#include "Scene/Objects/ObjectTypes.h"
+#include "Scene/Scene.h"
+#include "gtest/gtest.h"
+#include "Core/PropertyNames.h"
+
+class MockSceneObject : public ISceneObject {
+public:
+    explicit MockSceneObject(const std::string& type = "Mock") : m_Type(type) {
+        m_Properties.Add<glm::vec3>(PropertyNames::Position, {0.0f, 0.0f, 0.0f});
+    }
+    std::string GetTypeString() const override { return m_Type; }
+    void Draw(const glm::mat4&, const glm::mat4&) override {}
+    void DrawForPicking(Shader&, const glm::mat4&, const glm::mat4&) override {}
+    void DrawHighlight(const glm::mat4&, const glm::mat4&) const override {}
+    void RebuildMesh() override {}
+    PropertySet& GetPropertySet() override { return m_Properties; }
+    const PropertySet& GetPropertySet() const override { return m_Properties; }
+    const glm::mat4& GetTransform() const override { return m_Transform; }
+    glm::vec3 GetPosition() const override { return m_Properties.GetValue<glm::vec3>(PropertyNames::Position); }
+    glm::quat GetRotation() const override { return m_Rotation; }
+    glm::vec3 GetScale() const override { return m_Scale; }
+    void SetPosition(const glm::vec3& p) override { m_Properties.SetValue<glm::vec3>(PropertyNames::Position, p); }
+    void SetRotation(const glm::quat& r) override { m_Rotation = r; }
+    void SetScale(const glm::vec3& s) override { m_Scale = s; }
+    void SetEulerAngles(const glm::vec3&) override {}
+    std::vector<GizmoHandleDef> GetGizmoHandleDefs() override { return {}; }
+    void OnGizmoUpdate(const std::string&, float, const glm::vec3&) override {}
+private:
+    std::string m_Type;
+    PropertySet m_Properties;
+    glm::mat4 m_Transform{1.0f};
+    glm::quat m_Rotation{1.0f, 0.0f, 0.0f, 0.0f};
+    glm::vec3 m_Scale{1.0f};
+};
+
+class SceneTest : public ::testing::Test {
+protected:
+    void SetUp() override {
+        factory.Register(std::string(ObjectTypes::Pyramid), []() {
+            return std::make_unique<MockSceneObject>(std::string(ObjectTypes::Pyramid));
+        });
+        scene = std::make_unique<Scene>(&factory);
+    }
+    SceneObjectFactory factory;
+    std::unique_ptr<Scene> scene;
+};
+
+// --- Positive Tests ---
+
+TEST_F(SceneTest, AddAndGetObject) {
+    scene->AddObject(factory.Create(std::string(ObjectTypes::Pyramid)));
+    ASSERT_EQ(scene->GetSceneObjects().size(), 1);
+    ISceneObject* obj = scene->GetObjectByID(1);
+    ASSERT_NE(obj, nullptr);
+    EXPECT_EQ(obj->id, 1);
+}
+
+TEST_F(SceneTest, DeleteObject) {
+    scene->AddObject(factory.Create(std::string(ObjectTypes::Pyramid)));
+    ASSERT_EQ(scene->GetSceneObjects().size(), 1);
+    scene->DeleteObjectByID(1);
+    ASSERT_EQ(scene->GetSceneObjects().size(), 0);
+}
+
+TEST_F(SceneTest, SelectObject) {
+    scene->AddObject(factory.Create(std::string(ObjectTypes::Pyramid)));
+    scene->SetSelectedObjectByID(1);
+    ISceneObject* selected = scene->GetSelectedObject();
+    ASSERT_NE(selected, nullptr);
+    EXPECT_EQ(selected->id, 1);
+    EXPECT_TRUE(selected->isSelected);
+}
+
+TEST_F(SceneTest, DuplicateObject) {
+    auto pyramid = factory.Create(std::string(ObjectTypes::Pyramid));
+    pyramid->SetPosition({1, 2, 3});
+    scene->AddObject(std::move(pyramid));
+    scene->DuplicateObject(1);
+    ASSERT_EQ(scene->GetSceneObjects().size(), 2);
+    ISceneObject* original = scene->GetObjectByID(1);
+    ISceneObject* clone = scene->GetObjectByID(2);
+    ASSERT_NE(clone, nullptr);
+    EXPECT_EQ(clone->GetTypeString(), original->GetTypeString());
+    EXPECT_NE(clone->id, original->id);
+    EXPECT_NE(clone->GetPosition(), original->GetPosition());
+}
+
+TEST_F(SceneTest, SaveAndLoad) {
+    scene->AddObject(factory.Create(std::string(ObjectTypes::Pyramid)));
+    ISceneObject* obj = scene->GetObjectByID(1);
+    obj->name = "MyPyramid";
+    obj->SetPosition({5, 5, 5});
+    scene->Save("test_scene.json");
+    scene->Clear();
+    scene->Load("test_scene.json");
+    ASSERT_EQ(scene->GetSceneObjects().size(), 1);
+    ISceneObject* loadedObject = scene->GetObjectByID(1);
+    ASSERT_NE(loadedObject, nullptr);
+    EXPECT_EQ(loadedObject->name, "MyPyramid");
+    EXPECT_EQ(loadedObject->GetPosition(), glm::vec3(5, 5, 5));
+    std::remove("test_scene.json");
+}
+
+// --- Negative and Edge Case Tests ---
+
+TEST_F(SceneTest, GetNonExistentObject) {
+    // NEGATIVE: Trying to get an object that doesn't exist should return nullptr.
+    EXPECT_EQ(scene->GetObjectByID(999), nullptr);
+}
+
+TEST_F(SceneTest, DeleteNonExistentObject) {
+    // NEGATIVE: Trying to delete an object that doesn't exist should not change the scene.
+    scene->AddObject(factory.Create(std::string(ObjectTypes::Pyramid)));
+    ASSERT_EQ(scene->GetSceneObjects().size(), 1);
+    scene->DeleteObjectByID(999);
+    EXPECT_EQ(scene->GetSceneObjects().size(), 1);
+}
+
+TEST_F(SceneTest, DuplicateNonExistentObject) {
+    // NEGATIVE: Trying to duplicate an object that doesn't exist should not add a new object.
+    scene->AddObject(factory.Create(std::string(ObjectTypes::Pyramid)));
+    ASSERT_EQ(scene->GetSceneObjects().size(), 1);
+    scene->DuplicateObject(999);
+    EXPECT_EQ(scene->GetSceneObjects().size(), 1);
+}
+
+TEST_F(SceneTest, ClearScene) {
+    // EDGE CASE: Clearing the scene should remove all objects and reset selection.
+    scene->AddObject(factory.Create(std::string(ObjectTypes::Pyramid)));
+    scene->SetSelectedObjectByID(1);
+    scene->Clear();
+    EXPECT_EQ(scene->GetSceneObjects().size(), 0);
+    EXPECT_EQ(scene->GetSelectedObject(), nullptr);
+}
+
+TEST_F(SceneTest, UniqueIDsAreAssigned) {
+    // EDGE CASE: Ensure that each new object gets a unique, incrementing ID.
+    scene->AddObject(factory.Create(std::string(ObjectTypes::Pyramid))); // ID 1
+    scene->AddObject(factory.Create(std::string(ObjectTypes::Pyramid))); // ID 2
+    scene->DeleteObjectByID(1);
+    scene->AddObject(factory.Create(std::string(ObjectTypes::Pyramid))); // Should get ID 3
+    EXPECT_NE(scene->GetObjectByID(2), nullptr);
+    EXPECT_NE(scene->GetObjectByID(3), nullptr);
+}
+
+TEST_F(SceneTest, DeselectObject) {
+    // POSITIVE: Test that an object can be deselected.
+    scene->AddObject(factory.Create(std::string(ObjectTypes::Pyramid)));
+    scene->SetSelectedObjectByID(1);
+    ASSERT_NE(scene->GetSelectedObject(), nullptr);
+    scene->SetSelectedObjectByID(0); // ID 0 is reserved for "no selection"
+    EXPECT_EQ(scene->GetSelectedObject(), nullptr);
+}

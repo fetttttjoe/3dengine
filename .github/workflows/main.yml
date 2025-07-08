@@ -1,0 +1,39 @@
+name: C++ CI
+
+# This workflow runs on every push and pull request to the main branch
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build-and-test:
+    # Use the latest version of Ubuntu as the operating system
+    runs-on: ubuntu-latest
+
+    steps:
+    # 1. Check out your repository code
+    - uses: actions/checkout@v4
+
+    # 2. Install dependencies required by OpenGL and GLFW on Linux
+    - name: Install Dependencies
+      run: sudo apt-get update && sudo apt-get install -y libgl1-mesa-dev libx11-dev libxi-dev libxrandr-dev libxinerama-dev libxcursor-dev libwayland-dev libxkbcommon-dev
+
+    # 3. Configure the CMake project
+    # This command generates the build files in a 'build' directory
+    - name: Configure CMake
+      run: cmake -B ${{github.workspace}}/build
+
+    # 4. Build the project
+    # This compiles both your main application and the test runner
+    - name: Build
+      run: cmake --build ${{github.workspace}}/build
+
+    # 5. Run the tests
+    # This command executes CTest, which will run all the tests discovered
+    # in the 'runTests' executable. The '--output-on-failure' flag ensures
+    # that you see detailed test logs if something goes wrong.
+    - name: Test
+      working-directory: ${{github.workspace}}/build
+      run: ctest --output-on-failure

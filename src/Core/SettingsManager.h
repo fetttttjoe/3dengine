@@ -3,20 +3,20 @@
 #include <glm/glm.hpp>
 #include <string>
 #include <vector>
+#include <unordered_map>
 
-/** Supported UI widget types for auto‐generation. */
+/** Supported UI widget types for auto-generation. */
 enum class SettingType {
   Float3,
-  Float,  // single float
-  // ... you can add Int, Bool, etc.
+  Float,
 };
 
 /** Descriptor for one setting. */
 struct SettingDescriptor {
-  std::string key;    // JSON key
-  std::string label;  // UI label
+  std::string key;
+  std::string label;
   SettingType type;
-  void* ptr;  // pointer into AppSettings
+  void* ptr;
 };
 
 /** All of your configurable settings with defaults. */
@@ -24,26 +24,28 @@ struct AppSettings {
   glm::vec3 cloneOffset = {0.5f, 0.5f, 0.0f};
   float leftPaneWidth = 200.0f;
   float rightPaneWidth = 300.0f;
-  // … future fields here …
 };
 
 class SettingsManager {
  public:
-  /// Get the singleton settings object
   static AppSettings& Get();
-
-  /// Load from disk (settings.json). Returns false if missing or parse error.
   static bool Load(const std::string& path = "settings.json");
-
-  /// Save to disk. Returns false on error.
   static bool Save(const std::string& path = "settings.json");
-
-  /// List of all descriptors for auto‐UI.
   static const std::vector<SettingDescriptor>& GetDescriptors();
 
  private:
+  // FIX: This struct holds the manager's internal data.
+  // It was missing from the header file.
+  struct ManagerData {
+      std::vector<SettingDescriptor> Descriptors;
+      std::unordered_map<std::string, const SettingDescriptor*> DescriptorMap;
+  };
+  
   static AppSettings s_Settings;
-  static std::vector<SettingDescriptor> s_Descriptors;
+  static ManagerData s_ManagerData;
+
+  // The Registrar uses a static instance to ensure its constructor
+  // runs once at program startup to populate the settings data.
   struct Registrar {
     Registrar();
   };
