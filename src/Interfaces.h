@@ -22,6 +22,7 @@
 class Scene;
 class Shader;
 class IProperty;
+class SculptableMesh;
 
 class PropertySet {
  public:
@@ -81,7 +82,6 @@ class IGizmoClient {
  public:
   virtual ~IGizmoClient() = default;
   virtual std::vector<GizmoHandleDef> GetGizmoHandleDefs() = 0;
-  // FIX: Signature now includes the axis of interaction for non-uniform scaling
   virtual void OnGizmoUpdate(const std::string& propertyName, float delta,
                              const glm::vec3& axis) = 0;
 };
@@ -110,6 +110,10 @@ class ISceneObject : public IGizmoClient {
   virtual void SetEulerAngles(const glm::vec3& eulerAngles) = 0;
   virtual void Serialize(nlohmann::json& outJson) const;
   virtual void Deserialize(const nlohmann::json& inJson);
+
+  virtual SculptableMesh* GetSculptableMesh() = 0;
+  virtual bool IsMeshDirty() const = 0;
+  virtual void SetMeshDirty(bool dirty) = 0;
 
   uint32_t id;
   std::string name;
@@ -230,7 +234,6 @@ void TProperty<T>::DrawEditor() {
     changed =
         ImGui::DragFloat3(m_Name.c_str(), glm::value_ptr(tempValue), 0.1f);
   } else if constexpr (std::is_same_v<T, glm::vec4>) {
-    // CORRECTED: Use the constant for a safe comparison
     if (m_Name == PropertyNames::Color) {
       changed = ImGui::ColorEdit4(m_Name.c_str(), glm::value_ptr(tempValue));
     } else {

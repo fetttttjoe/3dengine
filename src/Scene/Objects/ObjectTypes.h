@@ -10,4 +10,5 @@ constexpr std::string_view Grid = "Grid";
 constexpr std::string_view Pyramid = "Pyramid";
 constexpr std::string_view Triangle = "Triangle";
 constexpr std::string_view Sphere = "Sphere";
+constexpr std::string_view Icosphere = "Icosphere";
 }  // namespace ObjectTypes

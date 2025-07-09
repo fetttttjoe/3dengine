@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <unordered_map>
 
 class Scene;
 class Camera;
@@ -10,6 +11,21 @@ class ISceneObject;
 class Shader;
 class TransformGizmo;
 struct GLFWwindow;
+
+// <<< MODIFIED: Struct to hold GPU resources for a mesh
+struct GpuMeshResources {
+  GLuint vao = 0;
+  GLuint vbo = 0;
+  GLuint ebo = 0;
+  GLsizei indexCount = 0;
+
+  void Release() {
+    if (ebo) glDeleteBuffers(1, &ebo);
+    if (vbo) glDeleteBuffers(1, &vbo);
+    if (vao) glDeleteVertexArrays(1, &vao);
+    vao = vbo = ebo = indexCount = 0;
+  }
+};
 
 class OpenGLRenderer {
  public:
@@ -19,41 +35,35 @@ class OpenGLRenderer {
   bool Initialize(void* windowHandle);
   void Shutdown();
 
-  // Called when the viewport panel is resized
   void OnWindowResize(int width, int height);
 
-  // --- New Rendering Workflow ---
-  // 1. Begin drawing the 3D scene to an offscreen texture
   void BeginSceneFrame();
-  // 2. Draw all scene contents
   void RenderScene(const Scene& scene, const Camera& camera);
   void RenderHighlight(const ISceneObject& object, const Camera& camera);
   void RenderAnchors(const Scene& scene, const Camera& camera);
-  // 3. Finish drawing the 3D scene
   void EndSceneFrame();
 
-  // --- Final Composition ---
-  // 4. Begin drawing to the main window
   void BeginFrame();
-  // 5. Draw the ImGui interface
   void RenderUI();
-  // 6. Swap buffers to display the final image
   void EndFrame();
 
-  // --- Helpers ---
-  // Processes a mouse click to see which object was selected
   uint32_t ProcessPicking(int x, int y, const Scene& scene,
                           const Camera& camera);
   uint32_t ProcessGizmoPicking(int x, int y, TransformGizmo& gizmo,
                                const Camera& camera);
 
-  // Gives the UI the ID of the final rendered scene texture
   uint32_t GetSceneTextureId() const { return m_SceneColorTexture; }
+
+  // <<< Methods to manage mesh resources on the GPU
+  void SyncSceneObjects(const Scene& scene);
 
  private:
   void createFramebuffers();
   void cleanupFramebuffers();
   void createAnchorMesh();
+
+  // Helper to update a single object's GPU buffers
+  void updateGpuMesh(ISceneObject* object);
 
   GLFWwindow* m_Window;
   int m_Width, m_Height;
@@ -69,10 +79,13 @@ class OpenGLRenderer {
   std::shared_ptr<Shader> m_PickingShader;
   std::shared_ptr<Shader> m_HighlightShader;
   std::shared_ptr<Shader> m_AnchorShader;
+  std::shared_ptr<Shader> m_LitShader;
 
   // Primitives
   unsigned int m_AnchorVAO;
   unsigned int m_AnchorVBO;
   unsigned int m_AnchorEBO;
   GLsizei m_AnchorIndexCount;
+
+  std::unordered_map<uint32_t, GpuMeshResources> m_GpuResources;
 };

@@ -2,18 +2,20 @@
 
 #include <imgui.h>
 
-#include <glm/gtc/type_ptr.hpp>  // For glm::value_ptr
+#include <glm/gtc/type_ptr.hpp>
 
-#include "Core/Log.h"              // For logging save success
-#include "Core/PropertyNames.h"    // For SettingType enum
-#include "Core/SettingsManager.h"  // To access settings data and save
+#include "Core/Application.h"
+#include "Core/Log.h"
+#include "Core/PropertyNames.h"
+#include "Core/SettingsManager.h"
 
-SettingsWindow::SettingsWindow() {}
+SettingsWindow::SettingsWindow(Application* app) : m_App(app) {}
 
-void SettingsWindow::Draw(bool& showWindow) {
-  if (!showWindow) return;  // Only draw if flag is true
+void SettingsWindow::Draw() {
+  bool show = m_App->GetShowSettings();
+  if (!show) return;
 
-  ImGui::Begin("Settings", &showWindow);
+  ImGui::Begin("Settings", &show);
   for (auto const& desc : SettingsManager::GetDescriptors()) {
     switch (desc.type) {
       case SettingType::Float: {
@@ -24,8 +26,6 @@ void SettingsWindow::Draw(bool& showWindow) {
         auto ptr = static_cast<glm::vec3*>(desc.ptr);
         ImGui::DragFloat3(desc.label.c_str(), glm::value_ptr(*ptr), 0.05f);
       } break;
-        // Add cases for other setting types if they exist (e.g., Bool, Int,
-        // String)
     }
   }
   if (ImGui::Button("Save Settings")) {
@@ -34,4 +34,8 @@ void SettingsWindow::Draw(bool& showWindow) {
     }
   }
   ImGui::End();
+
+  if (!show) {
+    m_App->SetShowSettings(false);
+  }
 }

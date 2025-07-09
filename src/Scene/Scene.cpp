@@ -4,7 +4,7 @@
 
 #include <algorithm>
 #include <fstream>
-#include <glm/glm.hpp>  // for glm::vec3
+#include <glm/glm.hpp>
 #include <iomanip>
 #include <iostream>
 
@@ -17,7 +17,6 @@ Scene::Scene(SceneObjectFactory* factory) : m_ObjectFactory(factory) {}
 Scene::~Scene() = default;
 
 void Scene::Clear() {
-  // Keep only non-selectable (e.g. the grid), then renumber IDs
   m_Objects.erase(
       std::remove_if(m_Objects.begin(), m_Objects.end(),
                      [](auto const& obj) { return obj->isSelectable; }),
@@ -57,26 +56,20 @@ void Scene::Load(const std::string& filepath) {
   nlohmann::json sceneJson;
   in >> sceneJson;
 
-  // 1) remove all selectable objects, keep things like Grid
   Clear();
 
-  // 2) restore next‐ID
   m_NextObjectID = sceneJson.value("next_object_id", 1);
 
-  // 3) recreate each saved object
   const auto& arr = sceneJson["objects"];
   for (const auto& objJson : arr) {
     std::string type = objJson.value("type", "");
     auto clone = m_ObjectFactory->Create(type);
     if (!clone) continue;
 
-    // give it back its exact old state (including id & name)
     clone->Deserialize(objJson);
 
-    // ensure our allocator won't reuse this ID
     if (clone->id >= m_NextObjectID) m_NextObjectID = clone->id + 1;
 
-    // push _without_ reassigning id
     m_Objects.push_back(std::move(clone));
   }
 }
@@ -92,7 +85,14 @@ const std::vector<std::unique_ptr<ISceneObject>>& Scene::GetSceneObjects()
   return m_Objects;
 }
 
+// <<< MODIFIED: Added function definitions back to the .cpp file
 ISceneObject* Scene::GetObjectByID(uint32_t id) {
+  auto it = std::find_if(m_Objects.begin(), m_Objects.end(),
+                         [id](auto const& o) { return o->id == id; });
+  return (it != m_Objects.end() ? it->get() : nullptr);
+}
+
+const ISceneObject* Scene::GetObjectByID(uint32_t id) const {
   auto it = std::find_if(m_Objects.begin(), m_Objects.end(),
                          [id](auto const& o) { return o->id == id; });
   return (it != m_Objects.end() ? it->get() : nullptr);
@@ -167,25 +167,20 @@ int Scene::GetNextAvailableIndexForName(const std::string& baseName) const {
 }
 
 void Scene::DuplicateObject(uint32_t sourceID) {
-  // 1) locate the original
   ISceneObject* orig = GetObjectByID(sourceID);
   if (!orig || !orig->isSelectable || !m_ObjectFactory) return;
 
-  // 2) deep-clone via factory
   auto clone = m_ObjectFactory->Copy(*orig);
   if (!clone) return;
 
-  // 3) assign new ID
   clone->id = m_NextObjectID++;
 
-  // 4) fresh name: “Type” or “Type (n)”
   {
     std::string base = orig->GetTypeString();
     int idx = GetNextAvailableIndexForName(base);
     clone->name = (idx == 0) ? base : base + " (" + std::to_string(idx) + ")";
   }
 
-  // 5) offset position so it isn’t exactly on top
   {
     auto p = orig->GetPosition();
     glm::vec3 origPos = orig->GetPosition();
@@ -193,6 +188,5 @@ void Scene::DuplicateObject(uint32_t sourceID) {
     clone->SetPosition(origPos + offset);
   }
 
-  // 6) insert into scene
   m_Objects.push_back(std::move(clone));
 }

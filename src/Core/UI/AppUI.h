@@ -1,25 +1,16 @@
 #pragma once
 
-#include <array>
-#include <cstdint>
-#include <functional>
-#include <glm/glm.hpp>
 #include <memory>
 #include <string>
+#include <typeindex>
+#include <unordered_map>
+#include <vector>
 
-#include "imgui.h"
+#include "Core/UI/IView.h"
 
+// Forward declarations
 class Application;
-class Scene;
-class SceneObjectFactory;
 struct GLFWwindow;
-
-#include "Core/UI/HierarchyView.h"
-#include "Core/UI/InspectorView.h"
-#include "Core/UI/MenuBar.h"
-#include "Core/UI/SettingsWindow.h"
-#include "Core/UI/ToolsPane.h"
-#include "Core/UI/ViewportPane.h"
 
 class AppUI {
  public:
@@ -31,50 +22,34 @@ class AppUI {
   void BeginFrame();
   void EndFrame();
 
-  void Draw(uint32_t viewportTextureId);
+  template <typename T, typename... Args>
+  void RegisterView(Args&&... args) {
+    static_assert(std::is_base_of<IView, T>::value, "T must derive from IView");
+    auto view = std::make_unique<T>(std::forward<Args>(args)...);
+    m_ViewMap[typeid(T)] = view.get();
+    m_Views.push_back(std::move(view));
+  }
 
-  void SetObjectFactory(SceneObjectFactory* factory);
-  void SetExitRequestHandler(std::function<void()> handler);
-  void SetResetCameraHandler(std::function<void()> handler);
-  void ShowInspector();
+  template <typename T>
+  T* GetView() {
+    static_assert(std::is_base_of<IView, T>::value, "T must derive from IView");
+    auto it = m_ViewMap.find(typeid(T));
+    if (it != m_ViewMap.end()) {
+      return static_cast<T*>(it->second);
+    }
+    return nullptr;
+  }
 
-  // NEW: Add the declaration for the handler setter
-  void SetOnSceneLoadedHandler(std::function<void()> handler);  //
-
-  glm::vec2 GetViewportSize() const;
-  const std::array<ImVec2, 2>& GetViewportBounds() const;
-  bool IsViewportFocused() const;
-  bool IsViewportHovered() const;
-
-#if !defined(NDEBUG)
-  bool IsMetricsWindowVisible() const { return m_ShowMetricsWindow; }
-#endif
+  void Draw();
 
  private:
-  static void DrawSplitter(const char* id, float& valueToAdjust,
-                           bool invertDirection);
+  void DrawSplitter(const char* id, float& valueToAdjust, bool invertDirection);
 
   Application* m_App;
-  Scene* m_Scene;
-
-  std::unique_ptr<MenuBar> m_MenuBar;
-  std::unique_ptr<ToolsPane> m_ToolsPane;
-  std::unique_ptr<ViewportPane> m_ViewportPane;
-  std::unique_ptr<HierarchyView> m_HierarchyView;
-  std::unique_ptr<InspectorView> m_InspectorView;
-  std::unique_ptr<SettingsWindow> m_SettingsWindow;
 
   float m_LeftPaneWidth;
   float m_RightPaneWidth;
 
-  int m_ActiveRightTab = -1;
-
-  std::function<void()> m_ExitRequestHandler;
-  std::function<void()> m_ResetCameraHandler;
-  std::function<void()> m_OnSceneLoadedHandler;  //
-  bool m_ShowSettingsWindow = false;
-
-#if !defined(NDEBUG)
-  bool m_ShowMetricsWindow = false;
-#endif
+  std::vector<std::unique_ptr<IView>> m_Views;
+  std::unordered_map<std::type_index, IView*> m_ViewMap;
 };

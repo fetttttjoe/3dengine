@@ -27,6 +27,11 @@ public:
     void SetEulerAngles(const glm::vec3&) override {}
     std::vector<GizmoHandleDef> GetGizmoHandleDefs() override { return {}; }
     void OnGizmoUpdate(const std::string&, float, const glm::vec3&) override {}
+
+    SculptableMesh* GetSculptableMesh() override { return nullptr; }
+    bool IsMeshDirty() const override { return false; }
+    void SetMeshDirty(bool dirty) override {}
+
 private:
     std::string m_Type;
     PropertySet m_Properties;
@@ -106,12 +111,10 @@ TEST_F(SceneTest, SaveAndLoad) {
 // --- Negative and Edge Case Tests ---
 
 TEST_F(SceneTest, GetNonExistentObject) {
-    // NEGATIVE: Trying to get an object that doesn't exist should return nullptr.
     EXPECT_EQ(scene->GetObjectByID(999), nullptr);
 }
 
 TEST_F(SceneTest, DeleteNonExistentObject) {
-    // NEGATIVE: Trying to delete an object that doesn't exist should not change the scene.
     scene->AddObject(factory.Create(std::string(ObjectTypes::Pyramid)));
     ASSERT_EQ(scene->GetSceneObjects().size(), 1);
     scene->DeleteObjectByID(999);
@@ -119,7 +122,6 @@ TEST_F(SceneTest, DeleteNonExistentObject) {
 }
 
 TEST_F(SceneTest, DuplicateNonExistentObject) {
-    // NEGATIVE: Trying to duplicate an object that doesn't exist should not add a new object.
     scene->AddObject(factory.Create(std::string(ObjectTypes::Pyramid)));
     ASSERT_EQ(scene->GetSceneObjects().size(), 1);
     scene->DuplicateObject(999);
@@ -127,7 +129,6 @@ TEST_F(SceneTest, DuplicateNonExistentObject) {
 }
 
 TEST_F(SceneTest, ClearScene) {
-    // EDGE CASE: Clearing the scene should remove all objects and reset selection.
     scene->AddObject(factory.Create(std::string(ObjectTypes::Pyramid)));
     scene->SetSelectedObjectByID(1);
     scene->Clear();
@@ -136,7 +137,6 @@ TEST_F(SceneTest, ClearScene) {
 }
 
 TEST_F(SceneTest, UniqueIDsAreAssigned) {
-    // EDGE CASE: Ensure that each new object gets a unique, incrementing ID.
     scene->AddObject(factory.Create(std::string(ObjectTypes::Pyramid))); // ID 1
     scene->AddObject(factory.Create(std::string(ObjectTypes::Pyramid))); // ID 2
     scene->DeleteObjectByID(1);
@@ -146,7 +146,6 @@ TEST_F(SceneTest, UniqueIDsAreAssigned) {
 }
 
 TEST_F(SceneTest, DeselectObject) {
-    // POSITIVE: Test that an object can be deselected.
     scene->AddObject(factory.Create(std::string(ObjectTypes::Pyramid)));
     scene->SetSelectedObjectByID(1);
     ASSERT_NE(scene->GetSelectedObject(), nullptr);

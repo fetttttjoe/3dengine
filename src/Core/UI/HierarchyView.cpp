@@ -1,36 +1,26 @@
 #include "Core/UI/HierarchyView.h"
 
 #include <imgui.h>
-#include <imgui_stdlib.h>  // For ImGui::InputText with std::string
+#include <imgui_stdlib.h>
 
-#include <algorithm>
-
-#include "Core/Application.h"  // For access to SelectObject, GetTransformGizmo
+#include "Core/Application.h"
 #include "Scene/Objects/ObjectTypes.h"
 #include "Scene/Scene.h"
-#include "Scene/TransformGizmo.h"  // For SetTarget(nullptr)
+#include "Scene/TransformGizmo.h"
 
-HierarchyView::HierarchyView(Application* app, Scene* scene)
-    : m_App(app), m_Scene(scene) {}
+HierarchyView::HierarchyView(Application* app)
+    : m_App(app), m_Scene(app->GetScene()) {}
 
 void HierarchyView::Draw() {
-  if (m_IdToDelete) {
-    if (auto* sel = m_Scene->GetSelectedObject();
-        sel && sel->id == m_IdToDelete)
-      m_App->GetTransformGizmo()->SetTarget(nullptr);  // Deselect gizmo target
-    m_Scene->DeleteObjectByID(m_IdToDelete);
-    m_IdToDelete = 0;
-    m_RenameID = 0;  // Clear rename state if deleted
-    if (OnObjectDeleted) OnObjectDeleted(m_IdToDelete);  // Notify
-  }
+  uint32_t idToDelete = 0;
+  uint32_t idToDuplicate = 0;
 
-  uint32_t dupID = 0;
   if (ImGui::BeginTable(
           "object_list", 3,
           ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_RowBg)) {
     ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthStretch);
-    ImGui::TableSetupColumn("Dup", ImGuiTableColumnFlags_WidthFixed, 80);
-    ImGui::TableSetupColumn("Del", ImGuiTableColumnFlags_WidthFixed, 65);
+    ImGui::TableSetupColumn("Dup##Mode", ImGuiTableColumnFlags_WidthFixed, 40);
+    ImGui::TableSetupColumn("Del##Mode", ImGuiTableColumnFlags_WidthFixed, 40);
     ImGui::TableHeadersRow();
 
     for (auto& obj : m_Scene->GetSceneObjects()) {
@@ -54,27 +44,38 @@ void HierarchyView::Draw() {
         ImGui::PopItemWidth();
       } else {
         bool sel = (obj.get() == m_Scene->GetSelectedObject());
+        // FIX: Removed ImGuiSelectableFlags_SpanAllColumns to prevent text from
+        // overflowing onto the buttons in the other columns.
         if (ImGui::Selectable(obj->name.c_str(), sel)) {
-          if (OnObjectSelected) OnObjectSelected(oid);
+          m_App->SelectObject(oid);
         }
         if (ImGui::IsItemHovered() &&
             ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
           m_RenameID = oid;
           m_RenameBuffer = obj->name;
-          if (OnObjectSelected)
-            OnObjectSelected(oid);  // Also select on double-click
+          m_App->SelectObject(oid);
         }
       }
 
       ImGui::TableNextColumn();
-      if (ImGui::Button("Dup##dup")) dupID = oid;
+      if (ImGui::Button("Dup")) {
+        idToDuplicate = oid;
+      }
 
       ImGui::TableNextColumn();
-      if (ImGui::Button("Del##del")) m_IdToDelete = oid;
+      if (ImGui::Button("Del")) {
+        idToDelete = oid;
+      }
 
       ImGui::PopID();
     }
     ImGui::EndTable();
   }
-  if (dupID && OnObjectDuplicated) OnObjectDuplicated(dupID);
+
+  if (idToDuplicate != 0) {
+    m_Scene->DuplicateObject(idToDuplicate);
+  }
+  if (idToDelete != 0) {
+    m_Scene->DeleteObjectByID(idToDelete);
+  }
 }

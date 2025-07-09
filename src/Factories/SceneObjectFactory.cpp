@@ -15,7 +15,8 @@ std::unique_ptr<ISceneObject> SceneObjectFactory::Create(
   if (it != m_Registry.end()) {
     return it->second();
   }
-  Log::Debug("[SceneObjectFactory] Error: Unknown object type '", typeName, "'");
+  Log::Debug("[SceneObjectFactory] Error: Unknown object type '", typeName,
+             "'");
   return nullptr;
 }
 
@@ -24,8 +25,9 @@ std::unique_ptr<ISceneObject> SceneObjectFactory::Copy(
   // 1) Create a new blank object of the same type
   auto clone = Create(src.GetTypeString());
   if (!clone) {
-    Log::Debug("[SceneObjectFactory::Copy] Failed to create a new instance of '",
-               src.GetTypeString(), "' for copying.");
+    Log::Debug(
+        "[SceneObjectFactory::Copy] Failed to create a new instance of '",
+        src.GetTypeString(), "' for copying.");
     return nullptr;
   }
   // 2) Use serialization to transfer the state

@@ -1,10 +1,17 @@
 #pragma once
 
-class SettingsWindow {
+#include "Core/UI/IView.h"
+
+// Forward declarations
+class Application;
+
+class SettingsWindow : public IView {
  public:
-  SettingsWindow();
-  void Draw(bool& showWindow);  // Pass showWindow by reference to allow closing
+  explicit SettingsWindow(Application* app);
+
+  void Draw() override;
+  const char* GetName() const override { return "SettingsWindow"; }
 
  private:
-  // No direct members needed for now, as it accesses SettingsManager directly
+  Application* m_App;
 };

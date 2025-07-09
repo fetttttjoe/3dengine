@@ -23,11 +23,9 @@ class Grid : public ISceneObject {
   std::string GetTypeString() const override;
   void RebuildMesh() override;
 
-  // Property interface implementation (Grid has no editable properties)
   PropertySet& GetPropertySet() override { return m_Properties; }
   const PropertySet& GetPropertySet() const override { return m_Properties; }
 
-  // Transform interface implementation (Grid is static at the origin)
   const glm::mat4& GetTransform() const override;
   glm::vec3 GetPosition() const override;
   glm::quat GetRotation() const override;
@@ -37,10 +35,14 @@ class Grid : public ISceneObject {
   void SetScale(const glm::vec3& scale) override;
   void SetEulerAngles(const glm::vec3& eulerAngles) override;
 
-  // IGizmoClient implementation (Grid is not editable via gizmo)
   std::vector<GizmoHandleDef> GetGizmoHandleDefs() override;
   void OnGizmoUpdate(const std::string& propertyName, float delta,
                      const glm::vec3& axis) override;
+
+  // <<< MODIFIED: Implemented new pure virtual methods from ISceneObject
+  SculptableMesh* GetSculptableMesh() override { return nullptr; }
+  bool IsMeshDirty() const override { return false; }
+  void SetMeshDirty(bool dirty) override {}
 
   // Grid-specific methods
   void SetConfiguration(int size, int divisions);
@@ -59,9 +61,6 @@ class Grid : public ISceneObject {
   int m_Divisions;
   float m_Spacing;
 
-  // An empty property set to satisfy the interface
   PropertySet m_Properties;
-
-  // Transform (static)
   glm::mat4 m_Transform{1.0f};
 };

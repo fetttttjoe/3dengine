@@ -25,7 +25,17 @@ if(MSVC)
 endif()
 
 # --- Core Engine Library ---
-file(GLOB_RECURSE ENGINE_SOURCES CONFIGURE_DEPENDS "src/*.cpp")
+file(GLOB_RECURSE ENGINE_SOURCES 
+  CONFIGURE_DEPENDS 
+  "src/*.cpp"
+  "src/Core/*.cpp"
+  "src/Core/UI/*.cpp"
+  "src/Factories/*.cpp"
+  "src/Renderer/*.cpp"
+  "src/Scene/*.cpp"
+  "src/Scene/Objects/*.cpp"
+  "src/Sculpting/*.cpp"
+)
 list(FILTER ENGINE_SOURCES EXCLUDE REGEX ".*/main.cpp$")
 
 add_library(IntuitiveModeler STATIC ${ENGINE_SOURCES})

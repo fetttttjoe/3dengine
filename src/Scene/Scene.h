@@ -50,6 +50,7 @@ class Scene {
 
   /// Find pointer by ID (or nullptr).
   ISceneObject* GetObjectByID(uint32_t id);
+  const ISceneObject* GetObjectByID(uint32_t id) const;
 
  private:
   /// Helper for naming duplicates: returns 0 if no conflict, else next integer.

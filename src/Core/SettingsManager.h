@@ -2,8 +2,8 @@
 
 #include <glm/glm.hpp>
 #include <string>
-#include <vector>
 #include <unordered_map>
+#include <vector>
 
 /** Supported UI widget types for auto-generation. */
 enum class SettingType {
@@ -37,10 +37,10 @@ class SettingsManager {
   // FIX: This struct holds the manager's internal data.
   // It was missing from the header file.
   struct ManagerData {
-      std::vector<SettingDescriptor> Descriptors;
-      std::unordered_map<std::string, const SettingDescriptor*> DescriptorMap;
+    std::vector<SettingDescriptor> Descriptors;
+    std::unordered_map<std::string, const SettingDescriptor*> DescriptorMap;
   };
-  
+
   static AppSettings s_Settings;
   static ManagerData s_ManagerData;
 

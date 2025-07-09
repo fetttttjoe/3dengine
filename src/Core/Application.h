@@ -1,4 +1,3 @@
-// Core/Application.h
 #pragma once
 
 #include <Interfaces.h>
@@ -7,6 +6,9 @@
 #include <memory>
 #include <string>
 #include <vector>
+
+#include "Sculpting/ISculptTool.h"
+
 // Forward declarations
 struct GLFWwindow;
 class Camera;
@@ -14,8 +16,11 @@ class OpenGLRenderer;
 class Scene;
 class SceneObjectFactory;
 class TransformGizmo;
-// class UI; // Old forward declaration
-class AppUI;  // New forward declaration
+class AppUI;
+class PushPullTool;
+
+enum class EditorMode { TRANSFORM, SCULPT };
+
 class Application {
  public:
   Application(int initialWidth, int initialHeight);
@@ -23,26 +28,41 @@ class Application {
 
   void Run();
 
-  // Accessors for UI, Scene, etc. used by other parts of the system
+  // --- Core System Accessors ---
   Scene* GetScene() const { return m_Scene.get(); }
   TransformGizmo* GetTransformGizmo() const { return m_TransformGizmo.get(); }
-  SceneObjectFactory* GetObjectFactory() const {
-    return m_ObjectFactory.get();
-  }  // Added this getter
+  SceneObjectFactory* GetObjectFactory() const { return m_ObjectFactory.get(); }
+  AppUI* GetUI() const { return m_UI.get(); }
+  OpenGLRenderer* GetRenderer() const { return m_Renderer.get(); }
+  Camera* GetCamera() const { return m_Camera.get(); }
+  GLFWwindow* GetWindow() const { return m_Window; }
+
+  // --- State Management ---
+  void SelectObject(uint32_t id);
+  void SetEditorMode(EditorMode newMode, SculptMode::Mode newSculptMode);
+  EditorMode GetEditorMode() const { return m_EditorMode; }
+  // --- FIX: Added the missing GetSculptMode method ---
+  SculptMode::Mode GetSculptMode() const { return m_SculptMode; }
   bool GetShowAnchors() const { return m_ShowAnchors; }
   void SetShowAnchors(bool show) { m_ShowAnchors = show; }
+  void SetShowSettings(bool show) { m_ShowSettingsWindow = show; }
+  bool GetShowSettings() const { return m_ShowSettingsWindow; }
+  void SetShowMetricsWindow(bool show) { m_ShowMetricsWindow = show; }
+  bool GetShowMetricsWindow() const { return m_ShowMetricsWindow; }
 
-  void SelectObject(uint32_t id);  // Method to select an object, called by UI
+  // --- Actions ---
+  void OnSceneLoaded();
+  void Exit();
 
  private:
   void Initialize();
   void Cleanup();
-  void RegisterObjectTypes();  // Registers object types with m_ObjectFactory
+  void RegisterObjectTypes();
 
   void processKeyboardInput();
   void processMouseInput();
+  void processSculpting();
 
-  // GLFW callbacks
   static void framebuffer_size_callback(GLFWwindow* window, int w, int h);
   static void scroll_callback(GLFWwindow* window, double xoffset,
                               double yoffset);
@@ -59,17 +79,25 @@ class Application {
   std::unique_ptr<Scene> m_Scene;
   std::unique_ptr<SceneObjectFactory> m_ObjectFactory;
   std::unique_ptr<TransformGizmo> m_TransformGizmo;
-  std::unique_ptr<AppUI> m_UI;  // Changed type from UI to AppUI
+  std::unique_ptr<AppUI> m_UI;
+
+  std::unique_ptr<PushPullTool> m_PushPullTool;
+  EditorMode m_EditorMode = EditorMode::TRANSFORM;
+  SculptMode::Mode m_SculptMode = SculptMode::Pull;
 
   float m_LastFrame = 0.0f;
   float m_DeltaTime = 0.0f;
 
-  bool m_ShowAnchors = true;  // State for showing/hiding scene anchors
+  bool m_ShowAnchors = true;
+  bool m_ShowSettingsWindow = false;
+  bool m_ShowMetricsWindow = false;
 
-  // Mouse picking/dragging state
   glm::vec2 m_LastMousePos = {0, 0};
+  glm::vec2 m_LastViewportSize = {0, 0};
   bool m_IsDraggingObject = false;
   ISceneObject* m_DraggedObject = nullptr;
   float m_DragNDCDepth = 0.0f;
   bool m_IsDraggingGizmo = false;
+
+  bool m_IsSculpting = false;
 };
