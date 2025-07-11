@@ -9,14 +9,18 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 include(FetchContent)
 
 # --- Dependencies ---
+# Includes all new dependencies like implot, nfd, and tinyobjloader
 FetchContent_Declare(glfw GIT_REPOSITORY https://github.com/glfw/glfw.git GIT_TAG 3.4)
 FetchContent_Declare(glad GIT_REPOSITORY https://github.com/Dav1dde/glad.git GIT_TAG v0.1.36)
 FetchContent_Declare(glm GIT_REPOSITORY https://github.com/g-truc/glm.git GIT_TAG 1.0.1)
-FetchContent_Declare(imgui GIT_REPOSITORY https://github.com/ocornut/imgui.git GIT_TAG v1.92.0)
+FetchContent_Declare(imgui GIT_REPOSITORY https://github.com/ocornut/imgui.git GIT_TAG v1.90.4)
 FetchContent_Declare(nlohmann_json GIT_REPOSITORY https://github.com/nlohmann/json.git GIT_TAG v3.11.3)
 FetchContent_Declare(googletest GIT_REPOSITORY https://github.com/google/googletest.git GIT_TAG v1.14.0)
+FetchContent_Declare(implot GIT_REPOSITORY https://github.com/epezent/implot.git GIT_TAG v0.16)
+FetchContent_Declare(nfd GIT_REPOSITORY https://github.com/btzy/nativefiledialog-extended.git GIT_TAG v1.2.1)
+FetchContent_Declare(tinyobjloader GIT_REPOSITORY https://github.com/tinyobjloader/tinyobjloader.git GIT_TAG v2.0.0rc10)
 
-FetchContent_MakeAvailable(glfw glad glm imgui nlohmann_json googletest)
+FetchContent_MakeAvailable(glfw glad glm imgui nlohmann_json googletest implot nfd tinyobjloader)
 
 find_package(OpenGL REQUIRED)
 
@@ -25,6 +29,7 @@ if(MSVC)
 endif()
 
 # --- Core Engine Library ---
+# Using file globbing as you originally had it.
 file(GLOB_RECURSE ENGINE_SOURCES 
   CONFIGURE_DEPENDS 
   "src/*.cpp"
@@ -35,11 +40,13 @@ file(GLOB_RECURSE ENGINE_SOURCES
   "src/Scene/*.cpp"
   "src/Scene/Objects/*.cpp"
   "src/Sculpting/*.cpp"
+  "src/Sculpting/Tools/*.cpp"
 )
 list(FILTER ENGINE_SOURCES EXCLUDE REGEX ".*/main.cpp$")
 
 add_library(IntuitiveModeler STATIC ${ENGINE_SOURCES})
 
+# Add sources from dependencies to the library
 target_sources(IntuitiveModeler PRIVATE
   ${imgui_SOURCE_DIR}/imgui.cpp
   ${imgui_SOURCE_DIR}/imgui_draw.cpp
@@ -48,20 +55,27 @@ target_sources(IntuitiveModeler PRIVATE
   ${imgui_SOURCE_DIR}/backends/imgui_impl_glfw.cpp
   ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp
   ${imgui_SOURCE_DIR}/misc/cpp/imgui_stdlib.cpp
+  ${implot_SOURCE_DIR}/implot.cpp
+  ${implot_SOURCE_DIR}/implot_items.cpp
 )
 
+# Add include directories for ALL dependencies
 target_include_directories(IntuitiveModeler PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/src
   ${imgui_SOURCE_DIR}
   ${imgui_SOURCE_DIR}/backends
   ${imgui_SOURCE_DIR}/misc/cpp
   ${nlohmann_json_SOURCE_DIR}/include
+  ${implot_SOURCE_DIR}
+  ${tinyobjloader_SOURCE_DIR}
+  ${nfd_SOURCE_DIR}/src/include
 )
 
 target_compile_definitions(IntuitiveModeler PUBLIC GLM_ENABLE_EXPERIMENTAL)
 
+# Add link libraries for ALL dependencies
 target_link_libraries(IntuitiveModeler PUBLIC
-  glfw glad glm OpenGL::GL
+  glfw glad glm OpenGL::GL nfd
   $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:stdc++fs>
 )
 
@@ -87,6 +101,14 @@ include(GoogleTest)
 file(GLOB_RECURSE TEST_SOURCES CONFIGURE_DEPENDS "tests/*.cpp")
 add_executable(runTests ${TEST_SOURCES})
 
-target_link_libraries(runTests PRIVATE IntuitiveModeler gtest_main)
+target_link_libraries(runTests PRIVATE IntuitiveModeler gtest)
 
 gtest_discover_tests(runTests)
+
+# This command copies the test scene file to the same directory as the
+# test executable, so the test can find and load it.
+add_custom_command(TARGET runTests POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E copy
+  "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_scene.json"
+  "$<TARGET_FILE_DIR:runTests>/test_scene.json"
+)

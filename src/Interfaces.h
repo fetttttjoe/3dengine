@@ -91,7 +91,7 @@ class ISceneObject : public IGizmoClient {
   ISceneObject() : id(0), name("Unnamed Object"), isSelected(false) {}
   virtual ~ISceneObject() = default;
 
-  virtual void Draw(const glm::mat4& view, const glm::mat4& projection) = 0;
+  virtual void Draw(class OpenGLRenderer& renderer, const glm::mat4& view, const glm::mat4& projection) = 0;
   virtual void DrawForPicking(Shader& pickingShader, const glm::mat4& view,
                               const glm::mat4& projection) = 0;
   virtual void DrawHighlight(const glm::mat4& view,

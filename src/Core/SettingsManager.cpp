@@ -13,12 +13,14 @@ SettingsManager::Registrar SettingsManager::s_Registrar;
 
 SettingsManager::Registrar::Registrar() {
   s_ManagerData.Descriptors = {
-      {"cloneOffset", "Clone Offset", SettingType::Float3,
-       &s_Settings.cloneOffset},
-      {"leftPaneWidth", "Left Pane Width", SettingType::Float,
-       &s_Settings.leftPaneWidth},
-      {"rightPaneWidth", "Right Pane Width", SettingType::Float,
-       &s_Settings.rightPaneWidth}};
+      {"cloneOffset", "Clone Offset", SettingType::Float3, &s_Settings.cloneOffset},
+      {"objImportScale", "OBJ Import Scale", SettingType::Float, &s_Settings.objImportScale},
+      {"leftPaneWidth", "Left Pane Width", SettingType::Float, &s_Settings.leftPaneWidth},
+      {"rightPaneWidth", "Right Pane Width", SettingType::Float, &s_Settings.rightPaneWidth},
+      {"gridSize", "Grid Size", SettingType::Int, &s_Settings.gridSize},
+      {"gridDivisions", "Grid Divisions", SettingType::Int, &s_Settings.gridDivisions},
+      {"cameraSpeed", "Camera Speed", SettingType::Float, &s_Settings.cameraSpeed}
+  };
 
   for (const auto& desc : s_ManagerData.Descriptors) {
     s_ManagerData.DescriptorMap[desc.key] = &desc;
@@ -50,6 +52,9 @@ bool SettingsManager::Load(const std::string& path) {
           case SettingType::Float3:
             *static_cast<glm::vec3*>(desc.ptr) = jsonValue.get<glm::vec3>();
             break;
+          case SettingType::Int:
+            *static_cast<int*>(desc.ptr) = jsonValue.get<int>();
+            break;
         }
       }
     }
@@ -71,6 +76,9 @@ bool SettingsManager::Save(const std::string& path) {
         break;
       case SettingType::Float3:
         j[desc.key] = *static_cast<const glm::vec3*>(desc.ptr);
+        break;
+      case SettingType::Int:
+        j[desc.key] = *static_cast<const int*>(desc.ptr);
         break;
     }
   }

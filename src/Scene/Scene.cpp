@@ -1,6 +1,4 @@
-#include "Scene.h"
-
-#include <Core/SettingsManager.h>
+#include "Scene/Scene.h"
 
 #include <algorithm>
 #include <fstream>
@@ -8,29 +6,68 @@
 #include <iomanip>
 #include <iostream>
 
+#include "Core/Log.h"
+#include "Core/SettingsManager.h"
 #include "Factories/SceneObjectFactory.h"
 #include "Interfaces.h"
+#include "Scene/Objects/CustomMesh.h"
 #include "nlohmann/json.hpp"
+
+#define TINYOBJLOADER_IMPLEMENTATION
+#include "tiny_obj_loader.h"
 
 Scene::Scene(SceneObjectFactory* factory) : m_ObjectFactory(factory) {}
 
 Scene::~Scene() = default;
 
 void Scene::Clear() {
+  // Only remove selectable objects. Non-selectable ones like the grid should
+  // persist.
   m_Objects.erase(
       std::remove_if(m_Objects.begin(), m_Objects.end(),
-                     [](auto const& obj) { return obj->isSelectable; }),
+                     [](const auto& obj) { return obj->isSelectable; }),
       m_Objects.end());
+
+  m_DeferredDeletions.clear();
   m_SelectedIndex = -1;
-  m_NextObjectID = 1;
-  for (auto const& o : m_Objects)
-    m_NextObjectID = std::max(m_NextObjectID, o->id + 1);
+
+  // Recalculate the next ID based on the objects that remain (e.g., the grid)
+  uint32_t maxId = 0;
+  for (const auto& o : m_Objects) {
+    if (o) maxId = std::max(maxId, o->id);
+  }
+  m_NextObjectID = maxId + 1;
+}
+void Scene::ProcessDeferredDeletions() {
+  if (m_DeferredDeletions.empty()) {
+    return;
+  }
+
+  ISceneObject* selectedObject = GetSelectedObject();
+  if (selectedObject != nullptr) {
+    bool isSelectedForDeletion =
+        std::find(m_DeferredDeletions.begin(), m_DeferredDeletions.end(),
+                  selectedObject->id) != m_DeferredDeletions.end();
+    if (isSelectedForDeletion) {
+      SetSelectedObjectByID(0);
+    }
+  }
+
+  m_Objects.erase(std::remove_if(m_Objects.begin(), m_Objects.end(),
+                                 [this](const auto& obj) {
+                                   return std::find(m_DeferredDeletions.begin(),
+                                                    m_DeferredDeletions.end(),
+                                                    obj->id) !=
+                                          m_DeferredDeletions.end();
+                                 }),
+                  m_Objects.end());
+
+  m_DeferredDeletions.clear();
 }
 
 void Scene::Save(const std::string& filepath) const {
   nlohmann::json sceneJ;
   sceneJ["objects"] = nlohmann::json::array();
-
   uint32_t maxId = 0;
   for (auto const& o : m_Objects) {
     if (o->isSelectable) {
@@ -41,7 +78,6 @@ void Scene::Save(const std::string& filepath) const {
     maxId = std::max(maxId, o->id);
   }
   sceneJ["next_object_id"] = maxId + 1;
-
   std::ofstream ofs(filepath);
   ofs << std::setw(4) << sceneJ << "\n";
 }
@@ -52,26 +88,57 @@ void Scene::Load(const std::string& filepath) {
     Log::Debug("Could not open scene file for loading: ", filepath);
     return;
   }
-
   nlohmann::json sceneJson;
   in >> sceneJson;
-
   Clear();
-
   m_NextObjectID = sceneJson.value("next_object_id", 1);
-
   const auto& arr = sceneJson["objects"];
   for (const auto& objJson : arr) {
     std::string type = objJson.value("type", "");
     auto clone = m_ObjectFactory->Create(type);
     if (!clone) continue;
-
     clone->Deserialize(objJson);
-
     if (clone->id >= m_NextObjectID) m_NextObjectID = clone->id + 1;
-
     m_Objects.push_back(std::move(clone));
   }
+}
+
+std::pair<std::vector<float>, std::vector<unsigned int>>
+Scene::LoadMeshFromFile(const std::string& filepath) {
+  tinyobj::attrib_t attrib;
+  std::vector<tinyobj::shape_t> shapes;
+  std::vector<tinyobj::material_t> materials;
+  std::string warn, err;
+
+  if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err,
+                        filepath.c_str())) {
+    Log::Debug("Failed to load/parse .obj file: ", filepath);
+    Log::Debug("Warn: ", warn);
+    Log::Debug("Err: ", err);
+    return {};
+  }
+
+  std::vector<float> vertices;
+  std::vector<unsigned int> indices;
+  std::unordered_map<glm::vec3, uint32_t, Vec3Hash> uniqueVertices{};
+
+  for (const auto& shape : shapes) {
+    for (const auto& index : shape.mesh.indices) {
+      glm::vec3 vertex{};
+      vertex.x = attrib.vertices[3 * index.vertex_index + 0];
+      vertex.y = attrib.vertices[3 * index.vertex_index + 1];
+      vertex.z = attrib.vertices[3 * index.vertex_index + 2];
+
+      if (uniqueVertices.count(vertex) == 0) {
+        uniqueVertices[vertex] = static_cast<uint32_t>(vertices.size() / 3);
+        vertices.push_back(vertex.x);
+        vertices.push_back(vertex.y);
+        vertices.push_back(vertex.z);
+      }
+      indices.push_back(uniqueVertices[vertex]);
+    }
+  }
+  return {vertices, indices};
 }
 
 void Scene::AddObject(std::unique_ptr<ISceneObject> object) {
@@ -85,7 +152,6 @@ const std::vector<std::unique_ptr<ISceneObject>>& Scene::GetSceneObjects()
   return m_Objects;
 }
 
-// <<< MODIFIED: Added function definitions back to the .cpp file
 ISceneObject* Scene::GetObjectByID(uint32_t id) {
   auto it = std::find_if(m_Objects.begin(), m_Objects.end(),
                          [id](auto const& o) { return o->id == id; });
@@ -128,24 +194,24 @@ void Scene::SelectNextObject() {
   SetSelectedObjectByID(0);
 }
 
-void Scene::DeleteObjectByID(uint32_t id) {
-  auto it = std::find_if(m_Objects.begin(), m_Objects.end(),
-                         [id](auto const& o) { return o->id == id; });
-  if (it == m_Objects.end() || !(*it)->isSelectable) return;
-
-  bool wasSelected = ((*it)->isSelected);
-  m_Objects.erase(it);
-  if (wasSelected) m_SelectedIndex = -1;
+void Scene::QueueForDeletion(uint32_t id) {
+  if (std::find(m_DeferredDeletions.begin(), m_DeferredDeletions.end(), id) ==
+      m_DeferredDeletions.end()) {
+    m_DeferredDeletions.push_back(id);
+  }
 }
 
 void Scene::DeleteSelectedObject() {
-  if (auto* s = GetSelectedObject()) DeleteObjectByID(s->id);
+  if (auto* s = GetSelectedObject()) {
+    QueueForDeletion(s->id);
+  }
 }
 
 ISceneObject* Scene::GetSelectedObject() {
-  return (m_SelectedIndex >= 0 && m_SelectedIndex < (int)m_Objects.size())
-             ? m_Objects[m_SelectedIndex].get()
-             : nullptr;
+  if (m_SelectedIndex >= 0 && m_SelectedIndex < (int)m_Objects.size()) {
+    return m_Objects[m_SelectedIndex].get();
+  }
+  return nullptr;
 }
 
 int Scene::GetNextAvailableIndexForName(const std::string& baseName) const {
@@ -184,8 +250,7 @@ void Scene::DuplicateObject(uint32_t sourceID) {
   {
     auto p = orig->GetPosition();
     glm::vec3 origPos = orig->GetPosition();
-    glm::vec3 offset = SettingsManager::Get().cloneOffset;
-    clone->SetPosition(origPos + offset);
+    clone->SetPosition(origPos + SettingsManager::Get().cloneOffset);
   }
 
   m_Objects.push_back(std::move(clone));

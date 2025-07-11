@@ -4,9 +4,23 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <utility>
+#include <glm/glm.hpp>
+#include <unordered_map>
 
+// Forward declarations
 class ISceneObject;
 class SceneObjectFactory;
+
+// Hash function for glm::vec3 to use it as a key in unordered_map
+struct Vec3Hash {
+    std::size_t operator()(const glm::vec3& v) const {
+        auto h1 = std::hash<float>()(v.x);
+        auto h2 = std::hash<float>()(v.y);
+        auto h3 = std::hash<float>()(v.z);
+        return h1 ^ (h2 << 1) ^ (h3 << 2);
+    }
+};
 
 /**
  * @brief Manages a collection of ISceneObject, selection, save/load,
@@ -19,12 +33,17 @@ class Scene {
 
   /// Remove all selectable objects, reset IDs & selection.
   void Clear();
+  /// Processes the queue of objects marked for deletion.
+  void ProcessDeferredDeletions();
 
   /// Serialize only selectable objects to disk.
   void Save(const std::string& filepath) const;
 
   /// Load scene from disk, replacing existing objects.
   void Load(const std::string& filepath);
+  
+  /// Load a mesh from an OBJ file and return its vertex/index data.
+  std::pair<std::vector<float>, std::vector<unsigned int>> LoadMeshFromFile(const std::string& filepath);
 
   /// Add a freshly constructed object (assigns it a new ID).
   void AddObject(std::unique_ptr<ISceneObject> object);
@@ -35,8 +54,8 @@ class Scene {
   /// Duplicate an object by ID, carrying over all properties.
   void DuplicateObject(uint32_t sourceID);
 
-  /// Remove by ID or remove current selection.
-  void DeleteObjectByID(uint32_t id);
+  /// Queue an object for deletion at the start of the next frame.
+  void QueueForDeletion(uint32_t id);
   void DeleteSelectedObject();
 
   /// Mark the object with @p id as selected (for gizmo & inspector).
@@ -57,6 +76,7 @@ class Scene {
   int GetNextAvailableIndexForName(const std::string& baseName) const;
 
   std::vector<std::unique_ptr<ISceneObject>> m_Objects;
+  std::vector<uint32_t> m_DeferredDeletions;
   int m_SelectedIndex = -1;
   uint32_t m_NextObjectID = 1;
   SceneObjectFactory* m_ObjectFactory;

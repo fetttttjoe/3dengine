@@ -4,6 +4,7 @@
 #include "Scene/Scene.h"
 #include "gtest/gtest.h"
 #include "Core/PropertyNames.h"
+#include <cstdio> // Required for std::remove
 
 class MockSceneObject : public ISceneObject {
 public:
@@ -11,7 +12,7 @@ public:
         m_Properties.Add<glm::vec3>(PropertyNames::Position, {0.0f, 0.0f, 0.0f});
     }
     std::string GetTypeString() const override { return m_Type; }
-    void Draw(const glm::mat4&, const glm::mat4&) override {}
+    void Draw(class OpenGLRenderer& renderer, const glm::mat4& view, const glm::mat4& projection) override {}
     void DrawForPicking(Shader&, const glm::mat4&, const glm::mat4&) override {}
     void DrawHighlight(const glm::mat4&, const glm::mat4&) const override {}
     void RebuildMesh() override {}
@@ -65,7 +66,8 @@ TEST_F(SceneTest, AddAndGetObject) {
 TEST_F(SceneTest, DeleteObject) {
     scene->AddObject(factory.Create(std::string(ObjectTypes::Pyramid)));
     ASSERT_EQ(scene->GetSceneObjects().size(), 1);
-    scene->DeleteObjectByID(1);
+    scene->QueueForDeletion(1);
+    scene->ProcessDeferredDeletions();
     ASSERT_EQ(scene->GetSceneObjects().size(), 0);
 }
 
@@ -93,19 +95,28 @@ TEST_F(SceneTest, DuplicateObject) {
 }
 
 TEST_F(SceneTest, SaveAndLoad) {
+    const char* tempFilename = "temporary_scene_for_save_test.json";
     scene->AddObject(factory.Create(std::string(ObjectTypes::Pyramid)));
     ISceneObject* obj = scene->GetObjectByID(1);
     obj->name = "MyPyramid";
     obj->SetPosition({5, 5, 5});
-    scene->Save("test_scene.json");
+    scene->Save(tempFilename);
     scene->Clear();
-    scene->Load("test_scene.json");
-    ASSERT_EQ(scene->GetSceneObjects().size(), 1);
-    ISceneObject* loadedObject = scene->GetObjectByID(1);
+
+    // Use a mock factory for loading since we only need to test deserialization
+    SceneObjectFactory loadFactory;
+    loadFactory.Register(std::string(ObjectTypes::Pyramid), []() {
+        return std::make_unique<MockSceneObject>(std::string(ObjectTypes::Pyramid));
+    });
+    Scene loadScene(&loadFactory);
+    loadScene.Load(tempFilename);
+    
+    ASSERT_EQ(loadScene.GetSceneObjects().size(), 1);
+    ISceneObject* loadedObject = loadScene.GetObjectByID(1);
     ASSERT_NE(loadedObject, nullptr);
     EXPECT_EQ(loadedObject->name, "MyPyramid");
     EXPECT_EQ(loadedObject->GetPosition(), glm::vec3(5, 5, 5));
-    std::remove("test_scene.json");
+    std::remove(tempFilename);
 }
 
 // --- Negative and Edge Case Tests ---
@@ -117,7 +128,8 @@ TEST_F(SceneTest, GetNonExistentObject) {
 TEST_F(SceneTest, DeleteNonExistentObject) {
     scene->AddObject(factory.Create(std::string(ObjectTypes::Pyramid)));
     ASSERT_EQ(scene->GetSceneObjects().size(), 1);
-    scene->DeleteObjectByID(999);
+    scene->QueueForDeletion(999);
+    scene->ProcessDeferredDeletions();
     EXPECT_EQ(scene->GetSceneObjects().size(), 1);
 }
 
@@ -139,7 +151,8 @@ TEST_F(SceneTest, ClearScene) {
 TEST_F(SceneTest, UniqueIDsAreAssigned) {
     scene->AddObject(factory.Create(std::string(ObjectTypes::Pyramid))); // ID 1
     scene->AddObject(factory.Create(std::string(ObjectTypes::Pyramid))); // ID 2
-    scene->DeleteObjectByID(1);
+    scene->QueueForDeletion(1);
+    scene->ProcessDeferredDeletions();
     scene->AddObject(factory.Create(std::string(ObjectTypes::Pyramid))); // Should get ID 3
     EXPECT_NE(scene->GetObjectByID(2), nullptr);
     EXPECT_NE(scene->GetObjectByID(3), nullptr);

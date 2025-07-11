@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Core/UI/IView.h"
-#include "Sculpting/ISculptTool.h"
+#include "Core/UI/BrushSettings.h"
 
 // Forward declarations
 class Application;
@@ -9,23 +9,23 @@ class Scene;
 class ISceneObject;
 
 class InspectorView : public IView {
- public:
-  explicit InspectorView(Application* app);
+public:
+    explicit InspectorView(Application* app);
 
-  void Draw() override;
-  const char* GetName() const override { return "InspectorView"; }
+    void Draw() override;
+    const char* GetName() const override { return "InspectorView"; }
 
-  float GetBrushRadius() const { return m_BrushRadius; }
-  float GetBrushStrength() const { return m_BrushStrength; }
+    const BrushSettings& GetBrushSettings() const { return m_BrushSettings; }
+    BrushSettings& GetBrushSettings() { return m_BrushSettings; }
 
- private:
-  void DrawTransformControls(ISceneObject* sel);
-  void DrawProperties(ISceneObject* sel);
-  void DrawSculptControls(ISceneObject* sel);
+private:
+    void DrawTransformControls(ISceneObject* sel);
+    void DrawProperties(ISceneObject* sel);
+    void DrawSculptControls(ISceneObject* sel);
+    void DrawBrushSettings();
 
-  Application* m_App;
-  Scene* m_Scene;
+    Application* m_App;
+    Scene* m_Scene;
 
-  float m_BrushRadius = 0.5f;
-  float m_BrushStrength = 0.5f;
+    BrushSettings m_BrushSettings;
 };

@@ -26,6 +26,7 @@ OpenGLRenderer::OpenGLRenderer()
       m_SceneFBO(0),
       m_SceneColorTexture(0),
       m_DepthTexture(0),
+      m_SceneDepthRBO(0),
       m_AnchorVAO(0),
       m_AnchorVBO(0),
       m_AnchorEBO(0),
@@ -67,6 +68,7 @@ void OpenGLRenderer::cleanupFramebuffers() {
   glDeleteFramebuffers(1, &m_SceneFBO);
   glDeleteTextures(1, &m_SceneColorTexture);
   glDeleteTextures(1, &m_DepthTexture);
+  glDeleteRenderbuffers(1, &m_SceneDepthRBO);
 }
 
 void OpenGLRenderer::Shutdown() {
@@ -113,7 +115,7 @@ void OpenGLRenderer::SyncSceneObjects(const Scene& scene) {
   }
 
   for (const auto& objectPtr : scene.GetSceneObjects()) {
-    if (objectPtr->isSelectable && objectPtr->IsMeshDirty()) {
+    if (objectPtr && objectPtr->GetSculptableMesh() && objectPtr->IsMeshDirty()) {
       updateGpuMesh(objectPtr.get());
       objectPtr->SetMeshDirty(false);
     }
@@ -126,9 +128,11 @@ void OpenGLRenderer::updateGpuMesh(ISceneObject* object) {
   if (!meshData || meshData->GetVertices().empty()) return;
 
   GpuMeshResources& res = m_GpuResources[object->id];
+  
   if (res.vao == 0) {
     glGenVertexArrays(1, &res.vao);
-    glGenBuffers(1, &res.vbo);
+    glGenBuffers(1, &res.vboPositions);
+    glGenBuffers(1, &res.vboNormals);
     glGenBuffers(1, &res.ebo);
   }
 
@@ -138,81 +142,63 @@ void OpenGLRenderer::updateGpuMesh(ISceneObject* object) {
   const auto& indices = meshData->GetIndices();
 
   glBindVertexArray(res.vao);
-
-  glBindBuffer(GL_ARRAY_BUFFER, res.vbo);
-  glBufferData(
-      GL_ARRAY_BUFFER,
-      vertices.size() * sizeof(glm::vec3) + normals.size() * sizeof(glm::vec3),
-      nullptr, GL_DYNAMIC_DRAW);
-  glBufferSubData(GL_ARRAY_BUFFER, 0, vertices.size() * sizeof(glm::vec3),
-                  vertices.data());
-  glBufferSubData(GL_ARRAY_BUFFER, vertices.size() * sizeof(glm::vec3),
-                  normals.size() * sizeof(glm::vec3), normals.data());
-
-  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, res.ebo);
-  glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(unsigned int),
-               indices.data(), GL_STATIC_DRAW);
-
+  glBindBuffer(GL_ARRAY_BUFFER, res.vboPositions);
+  glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(glm::vec3), vertices.data(), GL_DYNAMIC_DRAW);
   glEnableVertexAttribArray(0);
   glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), (void*)0);
 
-  glEnableVertexAttribArray(1);
-  glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3),
-                        (void*)(vertices.size() * sizeof(glm::vec3)));
+  if (!normals.empty()) {
+    glBindBuffer(GL_ARRAY_BUFFER, res.vboNormals);
+    glBufferData(GL_ARRAY_BUFFER, normals.size() * sizeof(glm::vec3), normals.data(), GL_DYNAMIC_DRAW);
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), (void*)0);
+  }
 
+  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, res.ebo);
+  glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(unsigned int), indices.data(), GL_STATIC_DRAW);
   glBindVertexArray(0);
+  
   Log::Debug("Updated GPU mesh for object ID: ", object->id);
 }
 
+void OpenGLRenderer::ClearGpuResources() {
+    for (auto& pair : m_GpuResources) {
+        pair.second.Release();
+    }
+    m_GpuResources.clear();
+    Log::Debug("OpenGLRenderer: Cleared all GPU mesh resources.");
+}
 void OpenGLRenderer::RenderScene(const Scene& scene, const Camera& camera) {
-  const auto& view = camera.GetViewMatrix();
-  const auto& projection = camera.GetProjectionMatrix();
+    const auto& view = camera.GetViewMatrix();
+    const auto& projection = camera.GetProjectionMatrix();
 
-  m_LitShader->Bind();
-  m_LitShader->SetUniformMat4f("u_View", view);
-  m_LitShader->SetUniformMat4f("u_Projection", projection);
-
-  for (const auto& object : scene.GetSceneObjects()) {
-    if (!object->isSelectable) {
-      object->Draw(view, projection);
-      continue;
+    for (const auto& object : scene.GetSceneObjects()) {
+        object->Draw(*this, view, projection);
     }
-
-    auto it = m_GpuResources.find(object->id);
-    if (it != m_GpuResources.end()) {
-      const GpuMeshResources& res = it->second;
-      m_LitShader->SetUniformMat4f("u_Model", object->GetTransform());
-      m_LitShader->SetUniformVec4(
-          "u_Color", object->GetPropertySet().GetValue<glm::vec4>("Color"));
-
-      glBindVertexArray(res.vao);
-      glDrawElements(GL_TRIANGLES, res.indexCount, GL_UNSIGNED_INT, nullptr);
-    }
-  }
-  glBindVertexArray(0);
 }
 
 void OpenGLRenderer::RenderAnchors(const Scene& scene, const Camera& camera) {
-  m_AnchorShader->Bind();
-  m_AnchorShader->SetUniformMat4f("u_View", camera.GetViewMatrix());
-  m_AnchorShader->SetUniformMat4f("u_Projection", camera.GetProjectionMatrix());
-  m_AnchorShader->SetUniform4f("u_Color", 0.0f, 1.0f, 0.0f, 1.0f);
+    if (!m_AnchorShader || m_AnchorVAO == 0) return;
 
-  glBindVertexArray(m_AnchorVAO);
+    m_AnchorShader->Bind();
+    m_AnchorShader->SetUniformMat4f("u_View", camera.GetViewMatrix());
+    m_AnchorShader->SetUniformMat4f("u_Projection", camera.GetProjectionMatrix());
+    m_AnchorShader->SetUniform4f("u_Color", 0.0f, 1.0f, 0.0f, 1.0f);
 
-  for (const auto& object : scene.GetSceneObjects()) {
-    if (!object->isSelectable) continue;
-
-    glm::vec4 anchor_local(0.0f, 0.0f, 0.0f, 1.0f);
-    glm::vec3 anchor_world = object->GetTransform() * anchor_local;
-
-    glm::mat4 model = glm::translate(glm::mat4(1.0f), anchor_world);
-    model = glm::scale(model, glm::vec3(0.05f));
-
-    m_AnchorShader->SetUniformMat4f("u_Model", model);
-    glDrawElements(GL_TRIANGLES, m_AnchorIndexCount, GL_UNSIGNED_INT, nullptr);
-  }
-  glBindVertexArray(0);
+    glBindVertexArray(m_AnchorVAO);
+    for (const auto& object : scene.GetSceneObjects()) {
+        if (!object->isSelectable) {
+            continue;
+        }
+        glm::vec4 anchor_local(0.0f, 0.0f, 0.0f, 1.0f);
+        glm::mat4 objectTransform = object->GetTransform();
+        glm::vec3 anchor_world = objectTransform * anchor_local;
+        glm::mat4 model = glm::translate(glm::mat4(1.0f), anchor_world);
+        model = glm::scale(model, glm::vec3(0.05f));
+        m_AnchorShader->SetUniformMat4f("u_Model", model);
+        glDrawElements(GL_TRIANGLES, m_AnchorIndexCount, GL_UNSIGNED_INT, nullptr);
+    }
+    glBindVertexArray(0);
 }
 
 void OpenGLRenderer::BeginFrame() {
@@ -236,33 +222,21 @@ uint32_t OpenGLRenderer::ProcessPicking(int x, int y, const Scene& scene,
   glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-  m_PickingShader->Bind();
-  m_PickingShader->SetUniformMat4f("u_View", camera.GetViewMatrix());
-  m_PickingShader->SetUniformMat4f("u_Projection",
-                                   camera.GetProjectionMatrix());
-
   for (const auto& object : scene.GetSceneObjects()) {
-    if (object->isSelectable) {
-      auto it = m_GpuResources.find(object->id);
-      if (it != m_GpuResources.end()) {
-        const GpuMeshResources& res = it->second;
-        m_PickingShader->SetUniformMat4f("u_Model", object->GetTransform());
-        m_PickingShader->SetUniform1ui("u_ObjectID", object->id);
-        glBindVertexArray(res.vao);
-        glDrawElements(GL_TRIANGLES, res.indexCount, GL_UNSIGNED_INT, nullptr);
+      if (object->isSelectable) {
+          object->DrawForPicking(*m_PickingShader, camera.GetViewMatrix(), camera.GetProjectionMatrix());
       }
-    }
   }
 
   glReadBuffer(GL_COLOR_ATTACHMENT0);
   uint32_t objectID = 0;
   glReadPixels(x, m_Height - y, 1, 1, GL_RED_INTEGER, GL_UNSIGNED_INT,
                &objectID);
-
   glBindFramebuffer(GL_FRAMEBUFFER, 0);
   return objectID;
 }
 
+// FIX: This function implementation is now present, which will resolve the linker error.
 uint32_t OpenGLRenderer::ProcessGizmoPicking(int x, int y,
                                              TransformGizmo& gizmo,
                                              const Camera& camera) {
@@ -270,35 +244,26 @@ uint32_t OpenGLRenderer::ProcessGizmoPicking(int x, int y,
   glViewport(0, 0, m_Width, m_Height);
   glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
   gizmo.DrawForPicking(camera, *m_PickingShader);
-
   glReadBuffer(GL_COLOR_ATTACHMENT0);
   uint32_t objectID = 0;
   glReadPixels(x, m_Height - y, 1, 1, GL_RED_INTEGER, GL_UNSIGNED_INT,
                &objectID);
-
   glBindFramebuffer(GL_FRAMEBUFFER, 0);
   return objectID;
 }
 
 void OpenGLRenderer::RenderHighlight(const ISceneObject& object,
                                      const Camera& camera) {
-  auto it = m_GpuResources.find(object.id);
-  if (it == m_GpuResources.end()) return;
-  const GpuMeshResources& res = it->second;
-
   glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
   glLineWidth(2.5f);
   m_HighlightShader->Bind();
   m_HighlightShader->SetUniformMat4f("u_Model", object.GetTransform());
   m_HighlightShader->SetUniformMat4f("u_View", camera.GetViewMatrix());
-  m_HighlightShader->SetUniformMat4f("u_Projection",
-                                     camera.GetProjectionMatrix());
+  m_HighlightShader->SetUniformMat4f("u_Projection", camera.GetProjectionMatrix());
   m_HighlightShader->SetUniform4f("u_Color", 1.0f, 0.8f, 0.0f, 1.0f);
-
-  glBindVertexArray(res.vao);
-  glDrawElements(GL_TRIANGLES, res.indexCount, GL_UNSIGNED_INT, nullptr);
+  
+  object.DrawHighlight(camera.GetViewMatrix(), camera.GetProjectionMatrix());
 
   m_HighlightShader->Unbind();
   glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
@@ -336,8 +301,12 @@ void OpenGLRenderer::createFramebuffers() {
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
   glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D,
                          m_SceneColorTexture, 0);
-  glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D,
-                         m_DepthTexture, 0);
+                         
+  glGenRenderbuffers(1, &m_SceneDepthRBO);
+  glBindRenderbuffer(GL_RENDERBUFFER, m_SceneDepthRBO);
+  glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, m_Width, m_Height);
+  glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, m_SceneDepthRBO);
+
   if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
     Log::Debug("ERROR: Scene FBO is not complete!");
 

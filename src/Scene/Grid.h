@@ -4,18 +4,17 @@
 #include <memory>
 #include <string>
 #include <vector>
-
 #include "Interfaces.h"
 
 class Shader;
 
 class Grid : public ISceneObject {
  public:
-  Grid(int size = 40, int divisions = 40);
+  Grid(); // Constructor now takes no arguments
   ~Grid() override;
 
   // ISceneObject Overrides
-  void Draw(const glm::mat4& view, const glm::mat4& projection) override;
+   void Draw(class OpenGLRenderer& renderer, const glm::mat4& view, const glm::mat4& projection) override;
   void DrawForPicking(Shader& pickingShader, const glm::mat4& view,
                       const glm::mat4& projection) override;
   void DrawHighlight(const glm::mat4& view,
@@ -39,7 +38,6 @@ class Grid : public ISceneObject {
   void OnGizmoUpdate(const std::string& propertyName, float delta,
                      const glm::vec3& axis) override;
 
-  // <<< MODIFIED: Implemented new pure virtual methods from ISceneObject
   SculptableMesh* GetSculptableMesh() override { return nullptr; }
   bool IsMeshDirty() const override { return false; }
   void SetMeshDirty(bool dirty) override {}

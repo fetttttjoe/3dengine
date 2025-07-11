@@ -18,7 +18,7 @@ class BaseObject : public ISceneObject {
   BaseObject();
   ~BaseObject() override;
 
-  void Draw(const glm::mat4& view, const glm::mat4& projection) override;
+  void Draw(class OpenGLRenderer& renderer, const glm::mat4& view, const glm::mat4& projection) override;
   void DrawForPicking(Shader& pickingShader, const glm::mat4& view,
                       const glm::mat4& projection) override;
   void DrawHighlight(const glm::mat4& view,
@@ -53,12 +53,13 @@ class BaseObject : public ISceneObject {
 
   std::shared_ptr<Shader> m_Shader;
   PropertySet m_Properties;
+
   mutable bool m_IsTransformDirty = true;
   bool m_IsMeshDirty = true;
 
   std::unique_ptr<SculptableMesh> m_SculptableMesh;
 
  private:
-  void RecalculateTransformMatrix();
+  void RecalculateTransformMatrix() const;
   mutable glm::mat4 m_TransformMatrix;
 };

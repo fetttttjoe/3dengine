@@ -19,6 +19,11 @@ class Icosphere : public BaseObject {
 
   std::string GetTypeString() const override;
 
+  // --- IGizmoClient Overrides ---
+  std::vector<GizmoHandleDef> GetGizmoHandleDefs() override;
+  void OnGizmoUpdate(const std::string& propertyName, float delta,
+                     const glm::vec3& axis) override;
+
  protected:
   void BuildMeshData(std::vector<float>& vertices,
                      std::vector<unsigned int>& indices) override;

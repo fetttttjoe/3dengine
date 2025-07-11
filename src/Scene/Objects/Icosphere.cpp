@@ -26,6 +26,26 @@ std::string Icosphere::GetTypeString() const {
   return std::string(ObjectTypes::Icosphere);
 }
 
+std::vector<GizmoHandleDef> Icosphere::GetGizmoHandleDefs() {
+    return {
+        {PropertyNames::Scale, {1.0f, 0.0f, 0.0f}, {1, 0, 0, 1}},
+        {PropertyNames::Scale, {0.0f, 1.0f, 0.0f}, {0, 1, 0, 1}},
+        {PropertyNames::Scale, {0.0f, 0.0f, 1.0f}, {0, 0, 1, 1}}
+    };
+}
+
+void Icosphere::OnGizmoUpdate(const std::string& propertyName, float delta,
+                               const glm::vec3& axis) {
+    if (propertyName == PropertyNames::Scale) {
+        glm::vec3 currentScale = m_Properties.GetValue<glm::vec3>(PropertyNames::Scale);
+        glm::vec3 scaleChange = axis * delta;
+        glm::vec3 newScale = currentScale + scaleChange;
+        newScale = glm::max(newScale, glm::vec3(0.05f));
+        m_Properties.SetValue<glm::vec3>(PropertyNames::Scale, newScale);
+    }
+}
+
+
 // Helper to find or create the midpoint of an edge to ensure vertices are
 // unique
 int Icosphere::getMiddlePoint(int p1, int p2, std::vector<glm::vec3>& vertices,

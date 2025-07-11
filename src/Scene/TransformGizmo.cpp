@@ -1,11 +1,9 @@
 #include "TransformGizmo.h"
-
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/component_wise.hpp>
 #include <glm/gtx/quaternion.hpp>
 #include <variant>
-
 #include "Core/Camera.h"
 #include "Core/Log.h"
 #include "Core/PropertyNames.h"
@@ -90,7 +88,6 @@ GizmoHandle* TransformGizmo::GetHandleByID(uint32_t id) {
 void TransformGizmo::SetActiveHandle(uint32_t id) {
   m_ActiveHandle = GetHandleByID(id);
 }
-
 void TransformGizmo::Update(const Camera& camera, const glm::vec2& mouseDelta,
                             bool isDragging, int winWidth, int winHeight) {
   if (!m_Target || !m_ActiveHandle || !isDragging) return;
@@ -99,10 +96,11 @@ void TransformGizmo::Update(const Camera& camera, const glm::vec2& mouseDelta,
   glm::vec3 axisWorldDir = glm::normalize(glm::vec3(
       objectRotationMatrix * glm::vec4(m_ActiveHandle->localDirection, 0.0f)));
   glm::vec3 objectWorldPos = m_Target->GetPosition();
-  glm::vec2 screenPosStart =
-      camera.WorldToScreen(objectWorldPos, winWidth, winHeight);
-  glm::vec2 screenPosEnd =
-      camera.WorldToScreen(objectWorldPos + axisWorldDir, winWidth, winHeight);
+  glm::mat4 viewProj = camera.GetProjectionMatrix() * camera.GetViewMatrix();
+
+  glm::vec2 screenPosStart = Camera::WorldToScreen(objectWorldPos, viewProj, winWidth, winHeight);
+  glm::vec2 screenPosEnd = Camera::WorldToScreen(objectWorldPos + axisWorldDir, viewProj, winWidth, winHeight);
+  
   glm::vec2 screenAxis = screenPosEnd - screenPosStart;
 
   if (glm::length(screenAxis) < 0.001f) return;
@@ -113,9 +111,8 @@ void TransformGizmo::Update(const Camera& camera, const glm::vec2& mouseDelta,
   float change =
       dot_product * sensitivity * m_ActiveHandle->directionMultiplier;
 
-  // FIX: Pass the handle's local direction as the axis of interaction
   m_Target->OnGizmoUpdate(m_ActiveHandle->propertyName, change,
-                          m_ActiveHandle->localDirection);
+                          axisWorldDir);
 }
 
 void TransformGizmo::Draw(const Camera& camera) {

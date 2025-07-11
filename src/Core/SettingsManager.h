@@ -9,6 +9,7 @@
 enum class SettingType {
   Float3,
   Float,
+  Int
 };
 
 /** Descriptor for one setting. */
@@ -21,9 +22,18 @@ struct SettingDescriptor {
 
 /** All of your configurable settings with defaults. */
 struct AppSettings {
+  // --- Object Settings ---
   glm::vec3 cloneOffset = {0.5f, 0.5f, 0.0f};
+  float objImportScale = 1.0f;
+
+  // --- UI Settings ---
   float leftPaneWidth = 200.0f;
   float rightPaneWidth = 300.0f;
+
+  // --- World Settings ---
+  int gridSize = 80;
+  int gridDivisions = 80;
+  float cameraSpeed = 5.0f;
 };
 
 class SettingsManager {
@@ -34,8 +44,6 @@ class SettingsManager {
   static const std::vector<SettingDescriptor>& GetDescriptors();
 
  private:
-  // FIX: This struct holds the manager's internal data.
-  // It was missing from the header file.
   struct ManagerData {
     std::vector<SettingDescriptor> Descriptors;
     std::unordered_map<std::string, const SettingDescriptor*> DescriptorMap;
@@ -44,8 +52,6 @@ class SettingsManager {
   static AppSettings s_Settings;
   static ManagerData s_ManagerData;
 
-  // The Registrar uses a static instance to ensure its constructor
-  // runs once at program startup to populate the settings data.
   struct Registrar {
     Registrar();
   };

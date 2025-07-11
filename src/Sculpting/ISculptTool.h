@@ -4,9 +4,10 @@
 
 // Forward declarations
 class SculptableMesh;
+struct BrushSettings;
 
 namespace SculptMode {
-enum Mode { Push, Pull, Smooth };
+enum Mode { Push, Pull, Smooth, Grab };
 }
 
 /**
@@ -23,12 +24,16 @@ class ISculptTool {
   /**
    * @brief Applies the sculpting effect to a mesh.
    * @param mesh The mesh to be modified.
-   * @param hitPoint The point in local space where the brush hits the mesh.
-   * @param brushRadius The radius of the sculpting brush.
-   * @param brushStrength The strength/intensity of the sculpting effect.
-   * @param mode The sculpting mode (e.g., Push or Pull).
+   * @param hitPoint The point in world space where the brush hits the mesh.
+   * @param rayDirection The direction of the mouse ray in world space.
+   * @param mouseDelta The 2D movement of the mouse in screen space.
+   * @param settings The brush configuration (radius, strength, falloff).
+   * @param viewMatrix The camera's view matrix.
+   * @param projectionMatrix The camera's projection matrix.
+   * @param viewportWidth The width of the viewport.
+   * @param viewportHeight The height of the viewport.
    */
-  virtual void Apply(SculptableMesh& mesh, const glm::vec3& hitPoint,
-                     float brushRadius, float brushStrength,
-                     SculptMode::Mode mode) = 0;
+  virtual void Apply(SculptableMesh& mesh, const glm::vec3& hitPoint, const glm::vec3& rayDirection, const glm::vec2& mouseDelta,
+                     const BrushSettings& settings, const glm::mat4& viewMatrix, const glm::mat4& projectionMatrix,
+                     int viewportWidth, int viewportHeight) = 0;
 };

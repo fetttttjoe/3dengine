@@ -20,7 +20,6 @@ Sphere::Sphere() {
                    onTransformChanged);
   m_Properties.Add(PropertyNames::Scale, glm::vec3(1.0f), onTransformChanged);
   m_Properties.Add(PropertyNames::Color, glm::vec4(0.8f, 0.8f, 0.8f, 1.0f));
-  // FIX: Set default radius to 1.0 as requested.
   m_Properties.Add(PropertyNames::Radius, 1.0f);
   RebuildMesh();
 }
@@ -43,7 +42,7 @@ void Sphere::OnGizmoUpdate(const std::string& propertyName, float delta,
     glm::vec3 currentScale =
         m_Properties.GetValue<glm::vec3>(PropertyNames::Scale);
 
-    // FIX: Apply the delta only to the axis that was dragged
+    // Apply the delta only to the axis that was dragged
     glm::vec3 scaleChange = axis * delta;
     glm::vec3 newScale = currentScale + scaleChange;
 

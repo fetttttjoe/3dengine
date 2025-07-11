@@ -1,6 +1,7 @@
 #pragma once
 #include <functional>
 #include <glm/glm.hpp>
+#include "Core/Log.h" // Add Log include
 
 struct GLFWwindow;
 
@@ -14,19 +15,22 @@ class Camera {
   void ProcessMouseScroll(float yoffset);
   void SetAspectRatio(float aspectRatio);
 
-  const glm::mat4& GetViewMatrix() const { return m_ViewMatrix; }
-  const glm::mat4& GetProjectionMatrix() const { return m_ProjectionMatrix; }
+  const glm::mat4& GetViewMatrix() const { 
+      Log::Debug("Camera::GetViewMatrix() called.");
+      return m_ViewMatrix; 
+  }
+  const glm::mat4& GetProjectionMatrix() const { 
+      Log::Debug("Camera::GetProjectionMatrix() called.");
+      return m_ProjectionMatrix; 
+  }
 
   glm::vec3 GetPosition() const { return m_Position; }
 
   // Helpers to convert between world and screen coordinates
-  glm::vec2 WorldToScreen(const glm::vec3& worldPos, int windowWidth,
-                          int windowHeight) const;
+  static glm::vec2 WorldToScreen(const glm::vec3& worldPos, const glm::mat4& viewProj, int windowWidth, int windowHeight);
+  static glm::vec3 ScreenToWorldPoint(const glm::vec2& screenPos, float ndcZ, const glm::mat4& invViewProj, int windowWidth, int windowHeight);
+  glm::vec3 ScreenToWorldRay(const glm::vec2& screenPos, int windowWidth, int windowHeight) const;
 
-  // IMPROVEMENT: Renamed 'depth' parameter to 'ndcZ' for clarity. It expects a
-  // depth value in Normalized Device Coordinates [-1, 1], not world units.
-  glm::vec3 ScreenToWorldPoint(const glm::vec2& screenPos, float ndcZ,
-                               int windowWidth, int windowHeight) const;
 
  private:
   void updateMatrices();
