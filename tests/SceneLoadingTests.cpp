@@ -36,9 +36,6 @@ protected:
     OpenGLRenderer* renderer;
 };
 
-// This integration test loads a scene containing one of every object type.
-// It verifies that all objects can be deserialized and that their core
-// functionality (like the Draw call) does not cause a crash.
 TEST_F(SceneLoadingTest, LoadAndVerifyAllObjects) {
     try {
         scene->Load("test_scene.json");
@@ -53,6 +50,7 @@ TEST_F(SceneLoadingTest, LoadAndVerifyAllObjects) {
         for (const auto& object : scene->GetSceneObjects()) {
             ASSERT_NE(object, nullptr);
             std::cout << "Verifying object: " << object->name << " (ID: " << object->id << ", Type: " << object->GetTypeString() << ")" << std::endl;
+            // The Draw call will now use the globally managed renderer.
             object->Draw(*renderer, dummyMat, dummyMat);
         }
     }

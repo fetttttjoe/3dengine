@@ -1,17 +1,14 @@
 #pragma once
 
-#include "Scene/Objects/BaseObject.h"
+#include "Scene/Objects/ScalableSphereObject.h"  // Inherit from the new class
 
-class Sphere : public BaseObject {
+class Sphere : public ScalableSphereObject {  // Changed base class
  public:
   Sphere();
   ~Sphere() override = default;
 
   std::string GetTypeString() const override;
-
   std::vector<GizmoHandleDef> GetGizmoHandleDefs() override;
-  void OnGizmoUpdate(const std::string& propertyName, float delta,
-                     const glm::vec3& axis) override;
 
  protected:
   void BuildMeshData(std::vector<float>& vertices,

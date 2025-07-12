@@ -16,21 +16,9 @@
 #include "Core/UI/ToolsPane.h"
 #include "Core/UI/ViewportPane.h"
 
-AppUI::AppUI(Application* app)
-    : m_App(app),
-      m_LeftPaneWidth(SettingsManager::Get().leftPaneWidth > 0
-                          ? SettingsManager::Get().leftPaneWidth
-                          : 200.0f),
-      m_RightPaneWidth(SettingsManager::Get().rightPaneWidth > 0
-                           ? SettingsManager::Get().rightPaneWidth
-                           : 300.0f) {}
+AppUI::AppUI(Application* app) : m_App(app) {}
 
-AppUI::~AppUI() {
-  // Values are now updated live, but we still save them here as a final
-  // measure.
-  SettingsManager::Get().leftPaneWidth = m_LeftPaneWidth;
-  SettingsManager::Get().rightPaneWidth = m_RightPaneWidth;
-}
+AppUI::~AppUI() {}
 
 void AppUI::Initialize(GLFWwindow* window) {
   IMGUI_CHECKVERSION();
@@ -62,8 +50,9 @@ void AppUI::EndFrame() {
 void AppUI::DrawSplitter(const char* id, float& valueToAdjust,
                          bool invertDirection) {
   ImGui::PushID(id);
-  ImGui::InvisibleButton("##split", ImVec2(5, -1),
-                         ImGuiButtonFlags_MouseButtonLeft);
+  ImGui::InvisibleButton(
+      "##split", ImVec2(5, -1),  // Height -1 means "fill remaining height"
+      ImGuiButtonFlags_MouseButtonLeft);
   ImGui::SetItemAllowOverlap();
 
   if (ImGui::IsItemHovered()) {
@@ -73,6 +62,7 @@ void AppUI::DrawSplitter(const char* id, float& valueToAdjust,
   if (ImGui::IsItemActive()) {
     float mouse_delta_x = ImGui::GetIO().MouseDelta.x;
     if (invertDirection) {
+      // Clamp to prevent panes from becoming too small or overlapping
       valueToAdjust = std::clamp(valueToAdjust - mouse_delta_x, 100.0f,
                                  ImGui::GetWindowSize().x - 100.0f);
     } else {
@@ -105,24 +95,49 @@ void AppUI::Draw() {
     menuBar->Draw();
   }
 
+  auto* settingsWindow = GetView<SettingsWindow>();
+  float leftPaneWidth, rightPaneWidth;
+
+  if (settingsWindow && settingsWindow->IsVisible()) {
+    leftPaneWidth = settingsWindow->GetLeftPaneWidth();
+    rightPaneWidth = settingsWindow->GetRightPaneWidth();
+  } else {
+    leftPaneWidth = SettingsManager::Get().leftPaneWidth;
+    rightPaneWidth = SettingsManager::Get().rightPaneWidth;
+  }
+
+  // Calculate the available content height AFTER the menu bar is drawn.
+  // This is crucial for correctly sizing the child windows vertically.
+  float content_height = ImGui::GetContentRegionAvail().y;
+
   // Left Pane
-  ImGui::BeginChild("LeftPane", ImVec2(m_LeftPaneWidth, 0), true);
+  ImGui::BeginChild("LeftPane", ImVec2(leftPaneWidth, content_height),
+                    true);  // Use calculated content_height
   if (auto* toolsPane = GetView<ToolsPane>()) {
     toolsPane->Draw();
   }
   ImGui::EndChild();
   ImGui::SameLine();
-  DrawSplitter("split_left", m_LeftPaneWidth, false);
+
+  // Splitter between Left Pane and Viewport
+  if (settingsWindow && settingsWindow->IsVisible()) {
+    DrawSplitter("split_left", settingsWindow->GetLeftPaneWidth(), false);
+  } else {
+    DrawSplitter("split_left", SettingsManager::Get().leftPaneWidth, false);
+  }
   ImGui::SameLine();
 
   // Center (Viewport)
-  float available_x = ImGui::GetContentRegionAvail().x;
-  float viewport_width = available_x - m_RightPaneWidth - 5.0f;
-  if (viewport_width < 100.0f) viewport_width = 100.0f;
+  float available_x =
+      ImGui::GetContentRegionAvail()
+          .x;  // Available width after left pane and its splitter
+  float viewport_width = available_x - rightPaneWidth;
+  if (viewport_width < 100.0f) viewport_width = 100.0f;  // Ensure minimum width
 
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
   ImGui::BeginChild(
-      "ViewportPane", ImVec2(viewport_width, 0), false,
+      "ViewportPane", ImVec2(viewport_width, content_height),
+      false,  // Use calculated content_height
       ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
   if (auto* viewportPane = GetView<ViewportPane>()) {
     viewportPane->Draw();
@@ -130,11 +145,18 @@ void AppUI::Draw() {
   ImGui::EndChild();
   ImGui::PopStyleVar();
   ImGui::SameLine();
-  DrawSplitter("split_right", m_RightPaneWidth, true);
+
+  // Splitter between Viewport and Right Pane
+  if (settingsWindow && settingsWindow->IsVisible()) {
+    DrawSplitter("split_right", settingsWindow->GetRightPaneWidth(), true);
+  } else {
+    DrawSplitter("split_right", SettingsManager::Get().rightPaneWidth, true);
+  }
   ImGui::SameLine();
 
   // Right Pane
-  ImGui::BeginChild("RightPane", ImVec2(m_RightPaneWidth, 0), true);
+  ImGui::BeginChild("RightPane", ImVec2(rightPaneWidth, content_height),
+                    true);  // Use calculated content_height
   if (ImGui::BeginTabBar("RightTabs")) {
     if (ImGui::BeginTabItem("Hierarchy")) {
       if (auto* hierarchyView = GetView<HierarchyView>()) {
@@ -152,13 +174,10 @@ void AppUI::Draw() {
   }
   ImGui::EndChild();
 
-  SettingsManager::Get().leftPaneWidth = m_LeftPaneWidth;
-  SettingsManager::Get().rightPaneWidth = m_RightPaneWidth;
+  ImGui::End();  // End MainAppWindow
 
-  ImGui::End();
-
-  // Draw any other top-level windows, like the settings window itself
-  if (auto* settingsWindow = GetView<SettingsWindow>()) {
+  // Draw settings window outside the main window layout to allow it to float
+  if (settingsWindow) {
     settingsWindow->Draw();
   }
 }

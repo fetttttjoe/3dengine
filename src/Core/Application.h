@@ -125,8 +125,7 @@ class Application {
   bool m_IsSculpting = false;
 
   // --- Pending Action Queues ---
-  std::vector<std::string>
-      m_RequestedCreationTypeNames;
+  std::vector<std::string> m_RequestedCreationTypeNames;
   uint32_t m_RequestedDuplicateID = 0;
   std::vector<uint32_t> m_RequestedDeletionIDs;
 };

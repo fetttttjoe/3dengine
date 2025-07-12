@@ -1,11 +1,19 @@
 #include "Scene/Objects/Triangle.h"
 
 #include "Core/PropertyNames.h"
+#include "Scene/Objects/BaseObject.h"
 #include "Scene/Objects/ObjectTypes.h"
 
 Triangle::Triangle() {
   name = std::string(ObjectTypes::Triangle);
-  m_Properties.SetValue<float>(PropertyNames::Depth, 0.0f);
+
+  // A callback for when the mesh needs to be rebuilt
+  auto onMeshChanged = [this]() { RebuildMesh(); };
+
+  // A Triangle only has Width and Height. It no longer uses Depth.
+  m_Properties.Add(PropertyNames::Width, 1.0f, onMeshChanged);
+  m_Properties.Add(PropertyNames::Height, 1.0f, onMeshChanged);
+
   RebuildMesh();
 }
 
@@ -16,6 +24,14 @@ std::string Triangle::GetTypeString() const {
 glm::vec3 Triangle::GetLocalCenter() const {
   return glm::vec3(
       0.0f, m_Properties.GetValue<float>(PropertyNames::Height) * 0.5f, 0.0f);
+}
+
+std::vector<GizmoHandleDef> Triangle::GetGizmoHandleDefs() {
+  if (!isPristine) {
+    return BaseObject::GetGizmoHandleDefs();
+  }
+  return {{PropertyNames::Width, {1.0f, 0.0f, 0.0f}, {1, 0, 0, 1}},
+          {PropertyNames::Height, {0.0f, 1.0f, 0.0f}, {0, 1, 0, 1}}};
 }
 
 void Triangle::BuildMeshData(std::vector<float>& vertices,

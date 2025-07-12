@@ -33,7 +33,9 @@ class ISculptTool {
    * @param viewportWidth The width of the viewport.
    * @param viewportHeight The height of the viewport.
    */
-  virtual void Apply(SculptableMesh& mesh, const glm::vec3& hitPoint, const glm::vec3& rayDirection, const glm::vec2& mouseDelta,
-                     const BrushSettings& settings, const glm::mat4& viewMatrix, const glm::mat4& projectionMatrix,
-                     int viewportWidth, int viewportHeight) = 0;
+  virtual void Apply(SculptableMesh& mesh, const glm::vec3& hitPoint,
+                     const glm::vec3& rayDirection, const glm::vec2& mouseDelta,
+                     const BrushSettings& settings, const glm::mat4& viewMatrix,
+                     const glm::mat4& projectionMatrix, int viewportWidth,
+                     int viewportHeight) = 0;
 };

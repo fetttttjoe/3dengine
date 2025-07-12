@@ -18,24 +18,22 @@ BaseObject::BaseObject() {
   m_Shader = ResourceManager::LoadShader("lit_shader", "shaders/lit.vert",
                                          "shaders/lit.frag");
 
-  // This single callback handles all properties that affect the object's visual appearance.
-  auto onVisualsChanged = [this]() {
+  auto onTransformChanged = [this]() {
     m_IsTransformDirty = true;
     Application::Get().RequestSceneRender();
   };
 
-  // This callback handles properties that require the mesh to be rebuilt.
-  auto onMeshChanged = [this]() {
-    RebuildMesh();
+  auto onRenderStateChanged = [this]() {
+    Application::Get().RequestSceneRender();
   };
 
-  m_Properties.Add(PropertyNames::Position, glm::vec3(0.0f), onVisualsChanged);
-  m_Properties.Add(PropertyNames::Rotation, glm::quat(1.0f, 0.0f, 0.0f, 0.0f), onVisualsChanged);
-  m_Properties.Add(PropertyNames::Scale, glm::vec3(1.0f), onVisualsChanged);
-  m_Properties.Add(PropertyNames::Color, glm::vec4(0.8f, 0.8f, 0.8f, 1.0f), onVisualsChanged);
-  m_Properties.Add(PropertyNames::Width, 1.0f, onMeshChanged);
-  m_Properties.Add(PropertyNames::Height, 1.0f, onMeshChanged);
-  m_Properties.Add(PropertyNames::Depth, 1.0f, onMeshChanged);
+  m_Properties.Add(PropertyNames::Position, glm::vec3(0.0f),
+                   onTransformChanged);
+  m_Properties.Add(PropertyNames::Rotation, glm::quat(1.0f, 0.0f, 0.0f, 0.0f),
+                   onTransformChanged);
+  m_Properties.Add(PropertyNames::Scale, glm::vec3(1.0f), onTransformChanged);
+  m_Properties.Add(PropertyNames::Color, glm::vec4(0.8f, 0.8f, 0.8f, 1.0f),
+                   onRenderStateChanged);
 }
 
 BaseObject::~BaseObject() = default;
@@ -51,11 +49,10 @@ void BaseObject::RebuildMesh() {
   }
 
   m_IsTransformDirty = true;
-  // A mesh rebuild always requires a re-render.
   Application::Get().RequestSceneRender();
 }
-
-void BaseObject::Draw(OpenGLRenderer& renderer, const glm::mat4& view, const glm::mat4& projection) {
+void BaseObject::Draw(OpenGLRenderer& renderer, const glm::mat4& view,
+                      const glm::mat4& projection) {
   if (!m_Shader) return;
 
   auto it = renderer.GetGpuResources().find(id);
@@ -156,32 +153,33 @@ void BaseObject::SetEulerAngles(const glm::vec3& eulerAngles) {
 }
 
 std::vector<GizmoHandleDef> BaseObject::GetGizmoHandleDefs() {
-  std::vector<GizmoHandleDef> defs;
-  if (m_Properties.GetProperty(PropertyNames::Width)) {
-    defs.push_back({PropertyNames::Width, {1.0f, 0.0f, 0.0f}, {1, 0, 0, 1}});
-  }
-  if (m_Properties.GetProperty(PropertyNames::Height)) {
-    defs.push_back({PropertyNames::Height, {0.0f, 1.0f, 0.0f}, {0, 1, 0, 1}});
-  }
-  if (m_Properties.GetProperty(PropertyNames::Depth)) {
-    if (m_Properties.GetValue<float>(PropertyNames::Depth) > 0.0f) {
-      defs.push_back({PropertyNames::Depth, {0.0f, 0.0f, 1.0f}, {0, 0, 1, 1}});
-    }
-  }
-  return defs;
+  return {{PropertyNames::Scale, {1.0f, 0.0f, 0.0f}, {1, 0, 0, 1}},
+          {PropertyNames::Scale, {0.0f, 1.0f, 0.0f}, {0, 1, 0, 1}},
+          {PropertyNames::Scale, {0.0f, 0.0f, 1.0f}, {0, 0, 1, 1}}};
 }
 
 void BaseObject::OnGizmoUpdate(const std::string& propertyName, float delta,
                                const glm::vec3& axis) {
-  try {
-    float currentValue = m_Properties.GetValue<float>(propertyName);
-    float newValue = currentValue + delta;
-    if (newValue < 0.05f) {
-      newValue = 0.05f;
+  if (propertyName == PropertyNames::Scale) {
+    glm::vec3 currentScale =
+        m_Properties.GetValue<glm::vec3>(PropertyNames::Scale);
+    glm::vec3 scaleChange(std::abs(axis.x) > 0.5f ? delta : 0.0f,
+                          std::abs(axis.y) > 0.5f ? delta : 0.0f,
+                          std::abs(axis.z) > 0.5f ? delta : 0.0f);
+    glm::vec3 newScale = currentScale + scaleChange;
+    newScale = glm::max(newScale, glm::vec3(0.05f));
+    m_Properties.SetValue<glm::vec3>(PropertyNames::Scale, newScale);
+  } else {
+    try {
+      float currentValue = m_Properties.GetValue<float>(propertyName);
+      float newValue = currentValue + delta;
+      if (newValue < 0.05f) {
+        newValue = 0.05f;
+      }
+      m_Properties.SetValue<float>(propertyName, newValue);
+    } catch (const std::exception& e) {
+      Log::Debug("Gizmo update failed: ", e.what());
     }
-    m_Properties.SetValue<float>(propertyName, newValue);
-  } catch (const std::exception& e) {
-    Log::Debug("Gizmo update failed: ", e.what());
   }
 }
 
@@ -189,6 +187,7 @@ void ISceneObject::Serialize(nlohmann::json& outJson) const {
   outJson["type"] = GetTypeString();
   outJson["id"] = id;
   outJson["name"] = name;
+  outJson["isPristine"] = isPristine;  // Save the pristine state
   nlohmann::json propsJson;
   GetPropertySet().Serialize(propsJson);
   outJson["properties"] = propsJson;
@@ -201,6 +200,7 @@ void ISceneObject::Serialize(nlohmann::json& outJson) const {
 void ISceneObject::Deserialize(const nlohmann::json& inJson) {
   id = inJson.value("id", 1);
   name = inJson.value("name", "Object");
+  isPristine = inJson.value("isPristine", true);  // Load the pristine state
   if (inJson.contains("properties")) {
     GetPropertySet().Deserialize(inJson["properties"]);
   }

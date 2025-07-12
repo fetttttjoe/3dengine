@@ -5,12 +5,11 @@
 #include <cmath>
 #include <vector>
 
+#include "Core/Application.h"
 #include "Core/ResourceManager.h"
 #include "Core/SettingsManager.h"
 #include "Scene/Objects/ObjectTypes.h"
 #include "Shader.h"
-#include "Core/Application.h"
-
 
 Grid::Grid() {
   name = std::string(ObjectTypes::Grid);
@@ -80,7 +79,8 @@ void Grid::RebuildMesh() {
   Application::Get().RequestSceneRender();
 }
 
-void Grid::Draw(OpenGLRenderer& renderer, const glm::mat4& view, const glm::mat4& projection) {
+void Grid::Draw(OpenGLRenderer& renderer, const glm::mat4& view,
+                const glm::mat4& projection) {
   if (!m_Shader) return;
 
   m_Shader->Bind();

@@ -9,9 +9,9 @@ class SculptableMesh;
 namespace Raycaster {
 
 struct RaycastResult {
-    bool hit = false;
-    float distance = std::numeric_limits<float>::max();
-    glm::vec3 hitPoint = glm::vec3(0.0f);
+  bool hit = false;
+  float distance = std::numeric_limits<float>::max();
+  glm::vec3 hitPoint = glm::vec3(0.0f);
 };
 
 /**
@@ -27,4 +27,4 @@ bool IntersectMesh(const glm::vec3& rayOrigin, const glm::vec3& rayDirection,
                    const SculptableMesh& mesh, const glm::mat4& modelMatrix,
                    RaycastResult& outResult);
 
-} // namespace Raycaster
+}  // namespace Raycaster

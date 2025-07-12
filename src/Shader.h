@@ -30,7 +30,7 @@ class Shader {
   // convenience overloads
   void SetUniformVec3(const std::string& name, const glm::vec3& v);
   void SetUniformVec4(const std::string& name, const glm::vec4& v);
-  
+
   unsigned int GetRendererID() const { return m_RendererID; }
 
  private:

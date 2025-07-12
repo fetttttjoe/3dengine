@@ -1,5 +1,6 @@
 #pragma once
 #include <glad/glad.h>
+
 #include <cstdint>
 #include <memory>
 #include <unordered_map>
@@ -58,8 +59,10 @@ class OpenGLRenderer {
 
   void SyncSceneObjects(const Scene& scene);
   void ClearGpuResources();
-  
-  std::unordered_map<uint32_t, GpuMeshResources>& GetGpuResources() { return m_GpuResources; }
+
+  std::unordered_map<uint32_t, GpuMeshResources>& GetGpuResources() {
+    return m_GpuResources;
+  }
 
  private:
   void createFramebuffers();

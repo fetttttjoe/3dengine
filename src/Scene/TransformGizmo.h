@@ -29,35 +29,31 @@ class TransformGizmo {
   TransformGizmo();
   ~TransformGizmo();
 
-  // Assigns the gizmo to a target object (which must be an IGizmoClient)
   void SetTarget(ISceneObject* target);
   ISceneObject* GetTarget() const { return m_Target; }
 
-  // Updates the target dimension based on mouse drag
   void Update(const Camera& camera, const glm::vec2& mouseDelta,
               bool isDragging, int winWidth, int winHeight);
 
-  // Renders the gizmo handles
   void Draw(const Camera& camera);
   void DrawForPicking(const Camera& camera, Shader& pickingShader);
 
-  // Handle selection
   void SetActiveHandle(uint32_t id);
   GizmoHandle* GetActiveHandle() { return m_ActiveHandle; }
 
-  // Checks if a given ID belongs to this gizmo
+  // This function is now public so it can be used by the unit tests.
+  GizmoHandle* GetHandleByID(uint32_t id);
+
   static bool IsGizmoID(uint32_t id) { return id >= GIZMO_ID_START; }
 
  private:
   void CreateHandles();
   void InitializeRendererObjects();
-  GizmoHandle* GetHandleByID(uint32_t id);
+  // GetHandleByID has been moved from here to the public section.
 
-  ISceneObject*
-      m_Target;  // The target is an ISceneObject, which is an IGizmoClient
+  ISceneObject* m_Target;
   std::vector<GizmoHandle> m_Handles;
   GizmoHandle* m_ActiveHandle;
-
   // Rendering resources
   std::shared_ptr<Shader> m_Shader;
   GLuint m_VAO = 0;

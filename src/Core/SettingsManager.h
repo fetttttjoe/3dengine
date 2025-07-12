@@ -6,11 +6,7 @@
 #include <vector>
 
 /** Supported UI widget types for auto-generation. */
-enum class SettingType {
-  Float3,
-  Float,
-  Int
-};
+enum class SettingType { Float3, Float, Int };
 
 /** Descriptor for one setting. */
 struct SettingDescriptor {

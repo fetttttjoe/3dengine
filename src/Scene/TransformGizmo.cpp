@@ -1,9 +1,11 @@
 #include "TransformGizmo.h"
+
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/component_wise.hpp>
 #include <glm/gtx/quaternion.hpp>
 #include <variant>
+
 #include "Core/Camera.h"
 #include "Core/Log.h"
 #include "Core/PropertyNames.h"
@@ -98,9 +100,11 @@ void TransformGizmo::Update(const Camera& camera, const glm::vec2& mouseDelta,
   glm::vec3 objectWorldPos = m_Target->GetPosition();
   glm::mat4 viewProj = camera.GetProjectionMatrix() * camera.GetViewMatrix();
 
-  glm::vec2 screenPosStart = Camera::WorldToScreen(objectWorldPos, viewProj, winWidth, winHeight);
-  glm::vec2 screenPosEnd = Camera::WorldToScreen(objectWorldPos + axisWorldDir, viewProj, winWidth, winHeight);
-  
+  glm::vec2 screenPosStart =
+      Camera::WorldToScreen(objectWorldPos, viewProj, winWidth, winHeight);
+  glm::vec2 screenPosEnd = Camera::WorldToScreen(objectWorldPos + axisWorldDir,
+                                                 viewProj, winWidth, winHeight);
+
   glm::vec2 screenAxis = screenPosEnd - screenPosStart;
 
   if (glm::length(screenAxis) < 0.001f) return;
@@ -111,8 +115,7 @@ void TransformGizmo::Update(const Camera& camera, const glm::vec2& mouseDelta,
   float change =
       dot_product * sensitivity * m_ActiveHandle->directionMultiplier;
 
-  m_Target->OnGizmoUpdate(m_ActiveHandle->propertyName, change,
-                          axisWorldDir);
+  m_Target->OnGizmoUpdate(m_ActiveHandle->propertyName, change, axisWorldDir);
 }
 
 void TransformGizmo::Draw(const Camera& camera) {

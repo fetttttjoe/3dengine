@@ -3,29 +3,15 @@
 #include <cmath>
 #include <glm/gtx/component_wise.hpp>
 
-#include "Core/Application.h"
 #include "Core/PropertyNames.h"
+#include "Scene/Objects/BaseObject.h"
 #include "Scene/Objects/ObjectTypes.h"
-
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif
-
 Sphere::Sphere() {
   name = std::string(ObjectTypes::Sphere);
-  
-  auto onVisualsChanged = [this]() {
-    m_IsTransformDirty = true;
-    Application::Get().RequestSceneRender();
-  };
-
-  m_Properties = PropertySet();
-  m_Properties.Add(PropertyNames::Position, glm::vec3(0.0f), onVisualsChanged);
-  m_Properties.Add(PropertyNames::Rotation, glm::quat(1.0f, 0.0f, 0.0f, 0.0f), onVisualsChanged);
-  m_Properties.Add(PropertyNames::Scale, glm::vec3(1.0f), onVisualsChanged);
-  m_Properties.Add(PropertyNames::Color, glm::vec4(0.8f, 0.8f, 0.8f, 1.0f), onVisualsChanged);
   m_Properties.Add(PropertyNames::Radius, 1.0f, [this]() { RebuildMesh(); });
-  
   RebuildMesh();
 }
 
@@ -34,26 +20,7 @@ std::string Sphere::GetTypeString() const {
 }
 
 std::vector<GizmoHandleDef> Sphere::GetGizmoHandleDefs() {
-  std::vector<GizmoHandleDef> defs;
-  defs.push_back({PropertyNames::Scale, {1.0f, 0.0f, 0.0f}, {1, 0, 0, 1}});
-  defs.push_back({PropertyNames::Scale, {0.0f, 1.0f, 0.0f}, {0, 1, 0, 1}});
-  defs.push_back({PropertyNames::Scale, {0.0f, 0.0f, 1.0f}, {0, 0, 1, 1}});
-  return defs;
-}
-
-void Sphere::OnGizmoUpdate(const std::string& propertyName, float delta,
-                           const glm::vec3& axis) {
-  if (propertyName == PropertyNames::Scale) {
-    glm::vec3 currentScale =
-        m_Properties.GetValue<glm::vec3>(PropertyNames::Scale);
-
-    glm::vec3 scaleChange = axis * delta;
-    glm::vec3 newScale = currentScale + scaleChange;
-
-    newScale = glm::max(newScale, glm::vec3(0.05f));
-
-    m_Properties.SetValue<glm::vec3>(PropertyNames::Scale, newScale);
-  }
+  return BaseObject::GetGizmoHandleDefs();
 }
 
 void Sphere::BuildMeshData(std::vector<float>& vertices,

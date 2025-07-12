@@ -1,10 +1,20 @@
 #include "Scene/Objects/Pyramid.h"
 
 #include "Core/PropertyNames.h"
+#include "Scene/Objects/BaseObject.h"  // Required for the GetGizmoHandleDefs override
 #include "Scene/Objects/ObjectTypes.h"
 
 Pyramid::Pyramid() {
   name = std::string(ObjectTypes::Pyramid);
+
+  // A callback for when the mesh needs to be rebuilt
+  auto onMeshChanged = [this]() { RebuildMesh(); };
+
+  // Add properties specific to a Pyramid
+  m_Properties.Add(PropertyNames::Width, 1.0f, onMeshChanged);
+  m_Properties.Add(PropertyNames::Height, 1.0f, onMeshChanged);
+  m_Properties.Add(PropertyNames::Depth, 1.0f, onMeshChanged);
+
   RebuildMesh();
 }
 
@@ -15,6 +25,18 @@ std::string Pyramid::GetTypeString() const {
 glm::vec3 Pyramid::GetLocalCenter() const {
   return glm::vec3(
       0.0f, m_Properties.GetValue<float>(PropertyNames::Height) * 0.25f, 0.0f);
+}
+
+std::vector<GizmoHandleDef> Pyramid::GetGizmoHandleDefs() {
+  // If the pyramid has been sculpted, fall back to the universal scale gizmo.
+  if (!isPristine) {
+    return BaseObject::GetGizmoHandleDefs();
+  }
+
+  // Otherwise, show the specific handles for width, height, and depth.
+  return {{PropertyNames::Width, {1.0f, 0.0f, 0.0f}, {1, 0, 0, 1}},
+          {PropertyNames::Height, {0.0f, 1.0f, 0.0f}, {0, 1, 0, 1}},
+          {PropertyNames::Depth, {0.0f, 0.0f, 1.0f}, {0, 0, 1, 1}}};
 }
 
 void Pyramid::BuildMeshData(std::vector<float>& vertices,

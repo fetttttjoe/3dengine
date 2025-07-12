@@ -91,7 +91,8 @@ class ISceneObject : public IGizmoClient {
   ISceneObject() : id(0), name("Unnamed Object"), isSelected(false) {}
   virtual ~ISceneObject() = default;
 
-  virtual void Draw(class OpenGLRenderer& renderer, const glm::mat4& view, const glm::mat4& projection) = 0;
+  virtual void Draw(class OpenGLRenderer& renderer, const glm::mat4& view,
+                    const glm::mat4& projection) = 0;
   virtual void DrawForPicking(Shader& pickingShader, const glm::mat4& view,
                               const glm::mat4& projection) = 0;
   virtual void DrawHighlight(const glm::mat4& view,
@@ -110,18 +111,18 @@ class ISceneObject : public IGizmoClient {
   virtual void SetEulerAngles(const glm::vec3& eulerAngles) = 0;
   virtual void Serialize(nlohmann::json& outJson) const;
   virtual void Deserialize(const nlohmann::json& inJson);
-  
-  virtual bool IsUserCreatable() const { return true; }
 
   virtual SculptableMesh* GetSculptableMesh() = 0;
   virtual bool IsMeshDirty() const = 0;
   virtual void SetMeshDirty(bool dirty) = 0;
+  virtual bool IsUserCreatable() const { return true; }
 
   uint32_t id;
   std::string name;
   bool isSelected;
   bool isSelectable = true;
   bool isStatic = false;
+  bool isPristine = true;
 };
 
 // =======================================================================

@@ -4,17 +4,19 @@
 #include <memory>
 #include <string>
 #include <vector>
+
 #include "Interfaces.h"
 
 class Shader;
 
 class Grid : public ISceneObject {
  public:
-  Grid(); // Constructor now takes no arguments
+  Grid();  // Constructor now takes no arguments
   ~Grid() override;
 
   // ISceneObject Overrides
-   void Draw(class OpenGLRenderer& renderer, const glm::mat4& view, const glm::mat4& projection) override;
+  void Draw(class OpenGLRenderer& renderer, const glm::mat4& view,
+            const glm::mat4& projection) override;
   void DrawForPicking(Shader& pickingShader, const glm::mat4& view,
                       const glm::mat4& projection) override;
   void DrawHighlight(const glm::mat4& view,
@@ -45,7 +47,8 @@ class Grid : public ISceneObject {
   // Grid-specific methods
   void SetConfiguration(int size, int divisions);
   glm::vec3 GetClosestGridPoint(const glm::vec3& worldPoint) const;
-bool IsUserCreatable() const override { return false; }
+  bool IsUserCreatable() const override { return false; }
+
  private:
   void Initialize();
 

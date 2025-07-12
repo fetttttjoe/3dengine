@@ -6,17 +6,12 @@
 #include <iomanip>
 #include <iostream>
 
+#include "Core/Application.h"
 #include "Core/Log.h"
 #include "Core/SettingsManager.h"
 #include "Factories/SceneObjectFactory.h"
 #include "Interfaces.h"
-#include "Scene/Objects/CustomMesh.h"
 #include "nlohmann/json.hpp"
-#include "Core/Application.h"
-
-
-#define TINYOBJLOADER_IMPLEMENTATION
-#include "tiny_obj_loader.h"
 
 Scene::Scene(SceneObjectFactory* factory) : m_ObjectFactory(factory) {}
 
@@ -38,6 +33,7 @@ void Scene::Clear() {
   m_NextObjectID = maxId + 1;
   Application::Get().RequestSceneRender();
 }
+
 void Scene::ProcessDeferredDeletions() {
   if (m_DeferredDeletions.empty()) {
     return;
@@ -105,43 +101,7 @@ void Scene::Load(const std::string& filepath) {
   Application::Get().RequestSceneRender();
 }
 
-std::pair<std::vector<float>, std::vector<unsigned int>>
-Scene::LoadMeshFromFile(const std::string& filepath) {
-  tinyobj::attrib_t attrib;
-  std::vector<tinyobj::shape_t> shapes;
-  std::vector<tinyobj::material_t> materials;
-  std::string warn, err;
-
-  if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err,
-                        filepath.c_str())) {
-    Log::Debug("Failed to load/parse .obj file: ", filepath);
-    Log::Debug("Warn: ", warn);
-    Log::Debug("Err: ", err);
-    return {};
-  }
-
-  std::vector<float> vertices;
-  std::vector<unsigned int> indices;
-  std::unordered_map<glm::vec3, uint32_t, Vec3Hash> uniqueVertices{};
-
-  for (const auto& shape : shapes) {
-    for (const auto& index : shape.mesh.indices) {
-      glm::vec3 vertex{};
-      vertex.x = attrib.vertices[3 * index.vertex_index + 0];
-      vertex.y = attrib.vertices[3 * index.vertex_index + 1];
-      vertex.z = attrib.vertices[3 * index.vertex_index + 2];
-
-      if (uniqueVertices.count(vertex) == 0) {
-        uniqueVertices[vertex] = static_cast<uint32_t>(vertices.size() / 3);
-        vertices.push_back(vertex.x);
-        vertices.push_back(vertex.y);
-        vertices.push_back(vertex.z);
-      }
-      indices.push_back(uniqueVertices[vertex]);
-    }
-  }
-  return {vertices, indices};
-}
+// The old LoadMeshFromFile function has been completely removed from this file.
 
 void Scene::AddObject(std::unique_ptr<ISceneObject> object) {
   if (!object) return;
@@ -258,7 +218,5 @@ void Scene::DuplicateObject(uint32_t sourceID) {
   }
 
   m_Objects.push_back(std::move(clone));
-
-  // This was the missing piece!
   Application::Get().RequestSceneRender();
 }

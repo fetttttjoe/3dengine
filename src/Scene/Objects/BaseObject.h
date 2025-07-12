@@ -18,7 +18,8 @@ class BaseObject : public ISceneObject {
   BaseObject();
   ~BaseObject() override;
 
-  void Draw(class OpenGLRenderer& renderer, const glm::mat4& view, const glm::mat4& projection) override;
+  void Draw(class OpenGLRenderer& renderer, const glm::mat4& view,
+            const glm::mat4& projection) override;
   void DrawForPicking(Shader& pickingShader, const glm::mat4& view,
                       const glm::mat4& projection) override;
   void DrawHighlight(const glm::mat4& view,

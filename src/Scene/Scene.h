@@ -1,12 +1,12 @@
 #pragma once
 
 #include <cstdint>
+#include <glm/glm.hpp>
 #include <memory>
 #include <string>
-#include <vector>
-#include <utility>
-#include <glm/glm.hpp>
 #include <unordered_map>
+#include <utility>
+#include <vector>
 
 // Forward declarations
 class ISceneObject;
@@ -14,12 +14,12 @@ class SceneObjectFactory;
 
 // Hash function for glm::vec3 to use it as a key in unordered_map
 struct Vec3Hash {
-    std::size_t operator()(const glm::vec3& v) const {
-        auto h1 = std::hash<float>()(v.x);
-        auto h2 = std::hash<float>()(v.y);
-        auto h3 = std::hash<float>()(v.z);
-        return h1 ^ (h2 << 1) ^ (h3 << 2);
-    }
+  std::size_t operator()(const glm::vec3& v) const {
+    auto h1 = std::hash<float>()(v.x);
+    auto h2 = std::hash<float>()(v.y);
+    auto h3 = std::hash<float>()(v.z);
+    return h1 ^ (h2 << 1) ^ (h3 << 2);
+  }
 };
 
 /**
@@ -41,9 +41,6 @@ class Scene {
 
   /// Load scene from disk, replacing existing objects.
   void Load(const std::string& filepath);
-  
-  /// Load a mesh from an OBJ file and return its vertex/index data.
-  std::pair<std::vector<float>, std::vector<unsigned int>> LoadMeshFromFile(const std::string& filepath);
 
   /// Add a freshly constructed object (assigns it a new ID).
   void AddObject(std::unique_ptr<ISceneObject> object);

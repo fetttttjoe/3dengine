@@ -4,7 +4,8 @@
 #include "Scene/Scene.h"
 #include "gtest/gtest.h"
 #include "Core/PropertyNames.h"
-#include <cstdio> // Required for std::remove
+#include <cstdio>
+#include "Scene/Objects/Pyramid.h" 
 
 class MockSceneObject : public ISceneObject {
 public:
@@ -44,8 +45,12 @@ private:
 class SceneTest : public ::testing::Test {
 protected:
     void SetUp() override {
-        factory.Register(std::string(ObjectTypes::Pyramid), []() {
+        // Register both a mock and a real pyramid for different tests
+        factory.Register(std::string(ObjectTypes::Pyramid) + "_Mock", []() {
             return std::make_unique<MockSceneObject>(std::string(ObjectTypes::Pyramid));
+        });
+        factory.Register(std::string(ObjectTypes::Pyramid), []() {
+            return std::make_unique<Pyramid>();
         });
         scene = std::make_unique<Scene>(&factory);
     }
@@ -56,7 +61,7 @@ protected:
 // --- Positive Tests ---
 
 TEST_F(SceneTest, AddAndGetObject) {
-    scene->AddObject(factory.Create(std::string(ObjectTypes::Pyramid)));
+    scene->AddObject(factory.Create(std::string(ObjectTypes::Pyramid) + "_Mock"));
     ASSERT_EQ(scene->GetSceneObjects().size(), 1);
     ISceneObject* obj = scene->GetObjectByID(1);
     ASSERT_NE(obj, nullptr);
@@ -64,7 +69,7 @@ TEST_F(SceneTest, AddAndGetObject) {
 }
 
 TEST_F(SceneTest, DeleteObject) {
-    scene->AddObject(factory.Create(std::string(ObjectTypes::Pyramid)));
+    scene->AddObject(factory.Create(std::string(ObjectTypes::Pyramid) + "_Mock"));
     ASSERT_EQ(scene->GetSceneObjects().size(), 1);
     scene->QueueForDeletion(1);
     scene->ProcessDeferredDeletions();
@@ -72,7 +77,7 @@ TEST_F(SceneTest, DeleteObject) {
 }
 
 TEST_F(SceneTest, SelectObject) {
-    scene->AddObject(factory.Create(std::string(ObjectTypes::Pyramid)));
+    scene->AddObject(factory.Create(std::string(ObjectTypes::Pyramid) + "_Mock"));
     scene->SetSelectedObjectByID(1);
     ISceneObject* selected = scene->GetSelectedObject();
     ASSERT_NE(selected, nullptr);
@@ -81,7 +86,7 @@ TEST_F(SceneTest, SelectObject) {
 }
 
 TEST_F(SceneTest, DuplicateObject) {
-    auto pyramid = factory.Create(std::string(ObjectTypes::Pyramid));
+    auto pyramid = factory.Create(std::string(ObjectTypes::Pyramid) + "_Mock");
     pyramid->SetPosition({1, 2, 3});
     scene->AddObject(std::move(pyramid));
     scene->DuplicateObject(1);
@@ -96,14 +101,13 @@ TEST_F(SceneTest, DuplicateObject) {
 
 TEST_F(SceneTest, SaveAndLoad) {
     const char* tempFilename = "temporary_scene_for_save_test.json";
-    scene->AddObject(factory.Create(std::string(ObjectTypes::Pyramid)));
+    scene->AddObject(factory.Create(std::string(ObjectTypes::Pyramid) + "_Mock"));
     ISceneObject* obj = scene->GetObjectByID(1);
     obj->name = "MyPyramid";
     obj->SetPosition({5, 5, 5});
     scene->Save(tempFilename);
     scene->Clear();
 
-    // Use a mock factory for loading since we only need to test deserialization
     SceneObjectFactory loadFactory;
     loadFactory.Register(std::string(ObjectTypes::Pyramid), []() {
         return std::make_unique<MockSceneObject>(std::string(ObjectTypes::Pyramid));
@@ -119,6 +123,37 @@ TEST_F(SceneTest, SaveAndLoad) {
     std::remove(tempFilename);
 }
 
+TEST_F(SceneTest, SaveAndLoadMaintainsUniqueProperties) {
+    const char* tempFilename = "property_test.json";
+    
+    // 1. Setup - Use the REAL Pyramid object
+    auto pyramid = factory.Create(std::string(ObjectTypes::Pyramid));
+    pyramid->GetPropertySet().SetValue<float>(PropertyNames::Width, 5.0f);
+    pyramid->GetPropertySet().SetValue<float>(PropertyNames::Height, 10.0f);
+    scene->AddObject(std::move(pyramid));
+    
+    // 2. Act
+    scene->Save(tempFilename);
+    scene->Clear();
+    
+    // Use a factory with the real pyramid for loading
+    SceneObjectFactory loadFactory;
+    loadFactory.Register(std::string(ObjectTypes::Pyramid), []() { return std::make_unique<Pyramid>(); });
+    Scene loadScene(&loadFactory);
+    loadScene.Load(tempFilename);
+
+    // 3. Assert
+    ASSERT_EQ(loadScene.GetSceneObjects().size(), 1);
+    ISceneObject* loadedObject = loadScene.GetObjectByID(1);
+    ASSERT_NE(loadedObject, nullptr);
+    
+    EXPECT_EQ(loadedObject->GetPropertySet().GetValue<float>(PropertyNames::Width), 5.0f);
+    EXPECT_EQ(loadedObject->GetPropertySet().GetValue<float>(PropertyNames::Height), 10.0f);
+
+    std::remove(tempFilename);
+}
+
+
 // --- Negative and Edge Case Tests ---
 
 TEST_F(SceneTest, GetNonExistentObject) {
@@ -126,7 +161,7 @@ TEST_F(SceneTest, GetNonExistentObject) {
 }
 
 TEST_F(SceneTest, DeleteNonExistentObject) {
-    scene->AddObject(factory.Create(std::string(ObjectTypes::Pyramid)));
+    scene->AddObject(factory.Create(std::string(ObjectTypes::Pyramid) + "_Mock"));
     ASSERT_EQ(scene->GetSceneObjects().size(), 1);
     scene->QueueForDeletion(999);
     scene->ProcessDeferredDeletions();
@@ -134,14 +169,14 @@ TEST_F(SceneTest, DeleteNonExistentObject) {
 }
 
 TEST_F(SceneTest, DuplicateNonExistentObject) {
-    scene->AddObject(factory.Create(std::string(ObjectTypes::Pyramid)));
+    scene->AddObject(factory.Create(std::string(ObjectTypes::Pyramid) + "_Mock"));
     ASSERT_EQ(scene->GetSceneObjects().size(), 1);
     scene->DuplicateObject(999);
     EXPECT_EQ(scene->GetSceneObjects().size(), 1);
 }
 
 TEST_F(SceneTest, ClearScene) {
-    scene->AddObject(factory.Create(std::string(ObjectTypes::Pyramid)));
+    scene->AddObject(factory.Create(std::string(ObjectTypes::Pyramid) + "_Mock"));
     scene->SetSelectedObjectByID(1);
     scene->Clear();
     EXPECT_EQ(scene->GetSceneObjects().size(), 0);
@@ -149,17 +184,17 @@ TEST_F(SceneTest, ClearScene) {
 }
 
 TEST_F(SceneTest, UniqueIDsAreAssigned) {
-    scene->AddObject(factory.Create(std::string(ObjectTypes::Pyramid))); // ID 1
-    scene->AddObject(factory.Create(std::string(ObjectTypes::Pyramid))); // ID 2
+    scene->AddObject(factory.Create(std::string(ObjectTypes::Pyramid) + "_Mock")); // ID 1
+    scene->AddObject(factory.Create(std::string(ObjectTypes::Pyramid) + "_Mock")); // ID 2
     scene->QueueForDeletion(1);
     scene->ProcessDeferredDeletions();
-    scene->AddObject(factory.Create(std::string(ObjectTypes::Pyramid))); // Should get ID 3
+    scene->AddObject(factory.Create(std::string(ObjectTypes::Pyramid) + "_Mock")); // Should get ID 3
     EXPECT_NE(scene->GetObjectByID(2), nullptr);
     EXPECT_NE(scene->GetObjectByID(3), nullptr);
 }
 
 TEST_F(SceneTest, DeselectObject) {
-    scene->AddObject(factory.Create(std::string(ObjectTypes::Pyramid)));
+    scene->AddObject(factory.Create(std::string(ObjectTypes::Pyramid) + "_Mock"));
     scene->SetSelectedObjectByID(1);
     ASSERT_NE(scene->GetSelectedObject(), nullptr);
     scene->SetSelectedObjectByID(0); // ID 0 is reserved for "no selection"

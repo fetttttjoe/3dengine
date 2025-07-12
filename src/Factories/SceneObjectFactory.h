@@ -23,8 +23,8 @@ class SceneObjectFactory {
  private:
   // This struct holds all the necessary info for each registered type
   struct RegistryEntry {
-      CreateFunc createFunc;
-      bool isUserCreatable;
+    CreateFunc createFunc;
+    bool isUserCreatable;
   };
 
   // The map correctly stores the RegistryEntry struct

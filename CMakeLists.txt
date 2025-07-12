@@ -7,9 +7,9 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 include(FetchContent)
+include(GoogleTest)
 
 # --- Dependencies ---
-# Includes all new dependencies like implot, nfd, and tinyobjloader
 FetchContent_Declare(glfw GIT_REPOSITORY https://github.com/glfw/glfw.git GIT_TAG 3.4)
 FetchContent_Declare(glad GIT_REPOSITORY https://github.com/Dav1dde/glad.git GIT_TAG v0.1.36)
 FetchContent_Declare(glm GIT_REPOSITORY https://github.com/g-truc/glm.git GIT_TAG 1.0.1)
@@ -29,7 +29,6 @@ if(MSVC)
 endif()
 
 # --- Core Engine Library ---
-# Using file globbing as you originally had it.
 file(GLOB_RECURSE ENGINE_SOURCES 
   CONFIGURE_DEPENDS 
   "src/*.cpp"
@@ -46,7 +45,6 @@ list(FILTER ENGINE_SOURCES EXCLUDE REGEX ".*/main.cpp$")
 
 add_library(IntuitiveModeler STATIC ${ENGINE_SOURCES})
 
-# Add sources from dependencies to the library
 target_sources(IntuitiveModeler PRIVATE
   ${imgui_SOURCE_DIR}/imgui.cpp
   ${imgui_SOURCE_DIR}/imgui_draw.cpp
@@ -59,7 +57,6 @@ target_sources(IntuitiveModeler PRIVATE
   ${implot_SOURCE_DIR}/implot_items.cpp
 )
 
-# Add include directories for ALL dependencies
 target_include_directories(IntuitiveModeler PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/src
   ${imgui_SOURCE_DIR}
@@ -73,21 +70,18 @@ target_include_directories(IntuitiveModeler PUBLIC
 
 target_compile_definitions(IntuitiveModeler PUBLIC GLM_ENABLE_EXPERIMENTAL)
 
-# Add link libraries for ALL dependencies
 target_link_libraries(IntuitiveModeler PUBLIC
-  glfw glad glm OpenGL::GL nfd
+  glfw glad glm OpenGL::GL nfd tinyobjloader
   $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:stdc++fs>
 )
 
 # --- Main Application Executable ---
 add_executable(IntuitiveModeler_App src/main.cpp)
 target_link_libraries(IntuitiveModeler_App PRIVATE IntuitiveModeler)
+# Set the output directory for the final executable
+set_target_properties(IntuitiveModeler_App PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/$<CONFIG>")
 
-set_target_properties(IntuitiveModeler_App PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
-if(WIN32)
-  set_target_properties(IntuitiveModeler_App PROPERTIES WIN32_EXECUTABLE $<$<CONFIG:Release>:TRUE>)
-endif()
-
+# Copy the shaders folder after the main app is built
 add_custom_command(TARGET IntuitiveModeler_App POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E copy_directory
   "${CMAKE_CURRENT_SOURCE_DIR}/shaders"
@@ -96,19 +90,25 @@ add_custom_command(TARGET IntuitiveModeler_App POST_BUILD
 
 # --- Testing Setup ---
 enable_testing()
-include(GoogleTest)
-
 file(GLOB_RECURSE TEST_SOURCES CONFIGURE_DEPENDS "tests/*.cpp")
 add_executable(runTests ${TEST_SOURCES})
-
 target_link_libraries(runTests PRIVATE IntuitiveModeler gtest)
+# Set the output directory for the test executable
+set_target_properties(runTests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/$<CONFIG>")
 
-gtest_discover_tests(runTests)
+# This tells CTest how to run your tests. The key is to set the working directory here.
+gtest_discover_tests(runTests
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/$<CONFIG>
+)
 
-# This command copies the test scene file to the same directory as the
-# test executable, so the test can find and load it.
+# Copy the resources after the test executable is built
 add_custom_command(TARGET runTests POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E copy
   "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_scene.json"
   "$<TARGET_FILE_DIR:runTests>/test_scene.json"
+)
+add_custom_command(TARGET runTests POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E copy_directory
+  "${CMAKE_CURRENT_SOURCE_DIR}/shaders"
+  "$<TARGET_FILE_DIR:runTests>/shaders"
 )

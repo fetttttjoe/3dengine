@@ -13,14 +13,19 @@ SettingsManager::Registrar SettingsManager::s_Registrar;
 
 SettingsManager::Registrar::Registrar() {
   s_ManagerData.Descriptors = {
-      {"cloneOffset", "Clone Offset", SettingType::Float3, &s_Settings.cloneOffset},
-      {"objImportScale", "OBJ Import Scale", SettingType::Float, &s_Settings.objImportScale},
-      {"leftPaneWidth", "Left Pane Width", SettingType::Float, &s_Settings.leftPaneWidth},
-      {"rightPaneWidth", "Right Pane Width", SettingType::Float, &s_Settings.rightPaneWidth},
+      {"cloneOffset", "Clone Offset", SettingType::Float3,
+       &s_Settings.cloneOffset},
+      {"objImportScale", "OBJ Import Scale", SettingType::Float,
+       &s_Settings.objImportScale},
+      {"leftPaneWidth", "Left Pane Width", SettingType::Float,
+       &s_Settings.leftPaneWidth},
+      {"rightPaneWidth", "Right Pane Width", SettingType::Float,
+       &s_Settings.rightPaneWidth},
       {"gridSize", "Grid Size", SettingType::Int, &s_Settings.gridSize},
-      {"gridDivisions", "Grid Divisions", SettingType::Int, &s_Settings.gridDivisions},
-      {"cameraSpeed", "Camera Speed", SettingType::Float, &s_Settings.cameraSpeed}
-  };
+      {"gridDivisions", "Grid Divisions", SettingType::Int,
+       &s_Settings.gridDivisions},
+      {"cameraSpeed", "Camera Speed", SettingType::Float,
+       &s_Settings.cameraSpeed}};
 
   for (const auto& desc : s_ManagerData.Descriptors) {
     s_ManagerData.DescriptorMap[desc.key] = &desc;
