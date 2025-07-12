@@ -2,17 +2,12 @@
 #include <imgui.h>
 #include <imgui_stdlib.h>
 #include "Core/Application.h"
-#include "Scene/Objects/ObjectTypes.h"
 #include "Scene/Scene.h"
-#include "Scene/TransformGizmo.h"
 
 HierarchyView::HierarchyView(Application* app)
     : m_App(app), m_Scene(app->GetScene()) {}
 
 void HierarchyView::Draw() {
-    uint32_t idToQueueForDeletion = 0;
-    uint32_t idToDuplicate = 0;
-
     if (ImGui::BeginTable(
             "object_list", 3,
             ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_RowBg)) {
@@ -28,15 +23,16 @@ void HierarchyView::Draw() {
             ImGui::TableNextRow();
             ImGui::TableNextColumn();
 
+            // ... (Rename logic remains the same) ...
             if (oid == m_RenameID) {
                 ImGui::PushItemWidth(-1);
                 if (ImGui::InputText("##rename", &m_RenameBuffer,
-                                     ImGuiInputTextFlags_EnterReturnsTrue)) {
+                                     ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll)) {
                     obj->name = m_RenameBuffer;
                     m_RenameID = 0;
                 }
                 if (ImGui::IsItemDeactivatedAfterEdit()) {
-                    obj->name = m_RenameBuffer;
+                     obj->name = m_RenameBuffer;
                     m_RenameID = 0;
                 }
                 ImGui::PopItemWidth();
@@ -53,25 +49,21 @@ void HierarchyView::Draw() {
                 }
             }
 
+
             ImGui::TableNextColumn();
             if (ImGui::Button("Dup")) {
-                idToDuplicate = oid;
+                // 1. Request duplication instead of doing it directly
+                m_App->RequestObjectDuplication(oid);
             }
 
             ImGui::TableNextColumn();
             if (ImGui::Button("Del")) {
-                idToQueueForDeletion = oid;
+                // 2. Request deletion instead of queueing it directly in the scene
+                m_App->RequestObjectDeletion(oid);
             }
 
             ImGui::PopID();
         }
         ImGui::EndTable();
-    }
-
-    if (idToDuplicate != 0) {
-        m_Scene->DuplicateObject(idToDuplicate);
-    }
-    if (idToQueueForDeletion != 0) {
-        m_Scene->QueueForDeletion(idToQueueForDeletion);
     }
 }

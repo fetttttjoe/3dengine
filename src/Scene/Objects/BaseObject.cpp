@@ -18,15 +18,21 @@ BaseObject::BaseObject() {
   m_Shader = ResourceManager::LoadShader("lit_shader", "shaders/lit.vert",
                                          "shaders/lit.frag");
 
-  auto onTransformChanged = [this]() { m_IsTransformDirty = true; };
-  auto onMeshChanged = [this]() { RebuildMesh(); };
+  // This single callback handles all properties that affect the object's visual appearance.
+  auto onVisualsChanged = [this]() {
+    m_IsTransformDirty = true;
+    Application::Get().RequestSceneRender();
+  };
 
-  m_Properties.Add(PropertyNames::Position, glm::vec3(0.0f),
-                   onTransformChanged);
-  m_Properties.Add(PropertyNames::Rotation, glm::quat(1.0f, 0.0f, 0.0f, 0.0f),
-                   onTransformChanged);
-  m_Properties.Add(PropertyNames::Scale, glm::vec3(1.0f), onTransformChanged);
-  m_Properties.Add(PropertyNames::Color, glm::vec4(0.8f, 0.8f, 0.8f, 1.0f));
+  // This callback handles properties that require the mesh to be rebuilt.
+  auto onMeshChanged = [this]() {
+    RebuildMesh();
+  };
+
+  m_Properties.Add(PropertyNames::Position, glm::vec3(0.0f), onVisualsChanged);
+  m_Properties.Add(PropertyNames::Rotation, glm::quat(1.0f, 0.0f, 0.0f, 0.0f), onVisualsChanged);
+  m_Properties.Add(PropertyNames::Scale, glm::vec3(1.0f), onVisualsChanged);
+  m_Properties.Add(PropertyNames::Color, glm::vec4(0.8f, 0.8f, 0.8f, 1.0f), onVisualsChanged);
   m_Properties.Add(PropertyNames::Width, 1.0f, onMeshChanged);
   m_Properties.Add(PropertyNames::Height, 1.0f, onMeshChanged);
   m_Properties.Add(PropertyNames::Depth, 1.0f, onMeshChanged);
@@ -45,7 +51,10 @@ void BaseObject::RebuildMesh() {
   }
 
   m_IsTransformDirty = true;
+  // A mesh rebuild always requires a re-render.
+  Application::Get().RequestSceneRender();
 }
+
 void BaseObject::Draw(OpenGLRenderer& renderer, const glm::mat4& view, const glm::mat4& projection) {
   if (!m_Shader) return;
 

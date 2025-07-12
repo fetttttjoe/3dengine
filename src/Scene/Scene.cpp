@@ -12,6 +12,8 @@
 #include "Interfaces.h"
 #include "Scene/Objects/CustomMesh.h"
 #include "nlohmann/json.hpp"
+#include "Core/Application.h"
+
 
 #define TINYOBJLOADER_IMPLEMENTATION
 #include "tiny_obj_loader.h"
@@ -21,8 +23,6 @@ Scene::Scene(SceneObjectFactory* factory) : m_ObjectFactory(factory) {}
 Scene::~Scene() = default;
 
 void Scene::Clear() {
-  // Only remove selectable objects. Non-selectable ones like the grid should
-  // persist.
   m_Objects.erase(
       std::remove_if(m_Objects.begin(), m_Objects.end(),
                      [](const auto& obj) { return obj->isSelectable; }),
@@ -31,12 +31,12 @@ void Scene::Clear() {
   m_DeferredDeletions.clear();
   m_SelectedIndex = -1;
 
-  // Recalculate the next ID based on the objects that remain (e.g., the grid)
   uint32_t maxId = 0;
   for (const auto& o : m_Objects) {
     if (o) maxId = std::max(maxId, o->id);
   }
   m_NextObjectID = maxId + 1;
+  Application::Get().RequestSceneRender();
 }
 void Scene::ProcessDeferredDeletions() {
   if (m_DeferredDeletions.empty()) {
@@ -63,6 +63,7 @@ void Scene::ProcessDeferredDeletions() {
                   m_Objects.end());
 
   m_DeferredDeletions.clear();
+  Application::Get().RequestSceneRender();
 }
 
 void Scene::Save(const std::string& filepath) const {
@@ -101,6 +102,7 @@ void Scene::Load(const std::string& filepath) {
     if (clone->id >= m_NextObjectID) m_NextObjectID = clone->id + 1;
     m_Objects.push_back(std::move(clone));
   }
+  Application::Get().RequestSceneRender();
 }
 
 std::pair<std::vector<float>, std::vector<unsigned int>>
@@ -145,6 +147,7 @@ void Scene::AddObject(std::unique_ptr<ISceneObject> object) {
   if (!object) return;
   object->id = m_NextObjectID++;
   m_Objects.push_back(std::move(object));
+  Application::Get().RequestSceneRender();
 }
 
 const std::vector<std::unique_ptr<ISceneObject>>& Scene::GetSceneObjects()
@@ -176,6 +179,7 @@ void Scene::SetSelectedObjectByID(uint32_t id) {
       break;
     }
   }
+  Application::Get().RequestSceneRender();
 }
 
 void Scene::SelectNextObject() {
@@ -254,4 +258,7 @@ void Scene::DuplicateObject(uint32_t sourceID) {
   }
 
   m_Objects.push_back(std::move(clone));
+
+  // This was the missing piece!
+  Application::Get().RequestSceneRender();
 }

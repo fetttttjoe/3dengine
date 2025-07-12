@@ -4,6 +4,7 @@
 #include "Interfaces.h"
 #include "Renderer/OpenGLRenderer.h"
 #include <GLFW/glfw3.h>
+#include "Core/Application.h" // Required to get the global renderer
 
 // Include all object types to register them with the factory
 #include "Scene/Objects/Pyramid.h"
@@ -17,8 +18,6 @@
 class SceneLoadingTest : public ::testing::Test {
 protected:
     void SetUp() override {
-        // In a test environment, we need to manually register the types that
-        // the scene file will reference, just like the main application does.
         factory.Register(std::string(ObjectTypes::Pyramid), []() { return std::make_unique<Pyramid>(); });
         factory.Register(std::string(ObjectTypes::Sphere), []() { return std::make_unique<Sphere>(); });
         factory.Register(std::string(ObjectTypes::Icosphere), []() { return std::make_unique<Icosphere>(); });
@@ -27,13 +26,14 @@ protected:
         factory.Register(std::string(ObjectTypes::Grid), []() { return std::make_unique<Grid>(); });
 
         scene = std::make_unique<Scene>(&factory);
-        renderer = std::make_unique<OpenGLRenderer>();
-        renderer->Initialize(glfwGetCurrentContext()); // Initialize with the context from the test runner
+        // Get the renderer from the global Application instance instead of creating a new one.
+        renderer = Application::Get().GetRenderer();
     }
 
     SceneObjectFactory factory;
     std::unique_ptr<Scene> scene;
-    std::unique_ptr<OpenGLRenderer> renderer;
+    // The renderer is now a raw pointer, as its lifetime is managed by the Application.
+    OpenGLRenderer* renderer;
 };
 
 // This integration test loads a scene containing one of every object type.
@@ -41,27 +41,18 @@ protected:
 // functionality (like the Draw call) does not cause a crash.
 TEST_F(SceneLoadingTest, LoadAndVerifyAllObjects) {
     try {
-        // Load the master scene file.
         scene->Load("test_scene.json");
 
-        // Check that objects were actually loaded.
         ASSERT_FALSE(scene->GetSceneObjects().empty()) << "No objects were loaded from test_scene.json. Make sure the file exists in the build directory.";
 
-        // IMPORTANT: Sync the scene with the renderer. This creates the GPU resources
-        // for each object before we try to draw them.
+        // Sync the scene with the renderer.
         renderer->SyncSceneObjects(*scene);
 
-        // Dummy matrices for testing the Draw() call.
         glm::mat4 dummyMat(1.0f);
 
         for (const auto& object : scene->GetSceneObjects()) {
-            // 1. Verify the object pointer is valid.
             ASSERT_NE(object, nullptr);
-
-            // 2. Log which object we are checking.
             std::cout << "Verifying object: " << object->name << " (ID: " << object->id << ", Type: " << object->GetTypeString() << ")" << std::endl;
-
-            // 3. Perform a "smoke test" on the Draw() method.
             object->Draw(*renderer, dummyMat, dummyMat);
         }
     }
@@ -71,6 +62,5 @@ TEST_F(SceneLoadingTest, LoadAndVerifyAllObjects) {
     catch (const std::exception& e) {
         FAIL() << "An unexpected exception occurred during the test: " << e.what();
     }
-    // If the loop completes without crashing or failing, all objects are valid.
     SUCCEED();
 }

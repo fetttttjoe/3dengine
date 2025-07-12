@@ -121,18 +121,56 @@ void Application::RegisterObjectTypes() {
     m_ObjectFactory->Register(std::string(ObjectTypes::CustomMesh), []() { return std::make_unique<CustomMesh>(); });
 }
 
+
+void Application::RequestObjectDuplication(uint32_t objectID) {
+    m_RequestedDuplicateID = objectID;
+}
+
+void Application::RequestObjectDeletion(uint32_t objectID) {
+    m_RequestedDeletionIDs.push_back(objectID);
+}
+
+void Application::RequestObjectCreation(const std::string& typeName) {
+    m_RequestedCreationTypeNames.push_back(typeName);
+}
+
+void Application::ProcessPendingActions() {
+    // Process creation requests
+    if (!m_RequestedCreationTypeNames.empty()) {
+        for (const auto& typeName : m_RequestedCreationTypeNames) {
+            if (auto obj = m_ObjectFactory->Create(typeName)) {
+                m_Scene->AddObject(std::move(obj));
+            }
+        }
+        m_RequestedCreationTypeNames.clear();
+    }
+
+    // Process duplication request
+    if (m_RequestedDuplicateID != 0) {
+        m_Scene->DuplicateObject(m_RequestedDuplicateID);
+        m_RequestedDuplicateID = 0;
+    }
+
+    // Process deletion requests
+    if (!m_RequestedDeletionIDs.empty()) {
+        for (uint32_t id : m_RequestedDeletionIDs) {
+            m_Scene->QueueForDeletion(id);
+        }
+        m_RequestedDeletionIDs.clear();
+    }
+}
+
+
 void Application::Run() {
     while (!glfwWindowShouldClose(m_Window)) {
-        Log::Debug("Run Loop: Start Frame");
-
         glfwPollEvents();
         float now = static_cast<float>(glfwGetTime());
         m_DeltaTime = now - m_LastFrame;
         m_LastFrame = now;
 
-        Log::Debug("Run Loop: Processing Deletions...");
+        ProcessPendingActions();
+        
         m_Scene->ProcessDeferredDeletions();
-        Log::Debug("Run Loop: ...Deletions Processed.");
 
         if (m_Scene->GetSelectedObject() == nullptr && m_TransformGizmo->GetTarget() != nullptr) {
             m_TransformGizmo->SetTarget(nullptr);
@@ -140,25 +178,21 @@ void Application::Run() {
 
         m_Renderer->SyncSceneObjects(*m_Scene);
 
-        Log::Debug("Run Loop: UI BeginFrame...");
         m_UI->BeginFrame();
         m_UI->Draw();
-        Log::Debug("Run Loop: ...UI Drawn.");
 
         if (auto* vp = m_UI->GetView<ViewportPane>()) {
             glm::vec2 currentSize = vp->GetSize();
             if (currentSize.x > 0 && currentSize.y > 0 && currentSize != m_LastViewportSize) {
-                Log::Debug("Run Loop: Resizing Viewport...");
                 m_Renderer->OnWindowResize((int)currentSize.x, (int)currentSize.y);
                 m_Camera->SetAspectRatio(currentSize.x / currentSize.y);
                 m_LastViewportSize = currentSize;
-                Log::Debug("Run Loop: ...Viewport Resized.");
+                RequestSceneRender(); 
             }
         }
         
-        Log::Debug("Run Loop: Handling Input...");
         if (auto* vp = m_UI->GetView<ViewportPane>(); vp && vp->IsHovered()) {
-            m_Camera->HandleInput(m_DeltaTime, []() {});
+            m_Camera->HandleInput(m_DeltaTime, [this]() { this->RequestSceneRender(); });
         }
         
         processKeyboardInput();
@@ -166,27 +200,24 @@ void Application::Run() {
         if (m_IsSculpting) {
             processSculpting();
         }
-        Log::Debug("Run Loop: ...Input Handled.");
 
-        Log::Debug("Run Loop: Renderer BeginSceneFrame...");
-        m_Renderer->BeginSceneFrame();
-        Log::Debug("Run Loop: ...Rendering Scene...");
-        m_Renderer->RenderScene(*m_Scene, *m_Camera);
+        if (m_SceneRenderRequested) {
+            m_Renderer->BeginSceneFrame();
+            m_Renderer->RenderScene(*m_Scene, *m_Camera);
 
-        if (auto* sel = m_Scene->GetSelectedObject()) {
-            if (m_EditorMode == EditorMode::TRANSFORM) {
-                Log::Debug("Run Loop: ...Rendering Highlight...");
-                m_Renderer->RenderHighlight(*sel, *m_Camera);
-                m_TransformGizmo->Draw(*m_Camera);
+            if (auto* sel = m_Scene->GetSelectedObject()) {
+                if (m_EditorMode == EditorMode::TRANSFORM) {
+                    m_Renderer->RenderHighlight(*sel, *m_Camera);
+                    m_TransformGizmo->Draw(*m_Camera);
+                }
             }
-        }
 
-        if (GetShowAnchors()) {
-            Log::Debug("Run Loop: ...Rendering Anchors...");
-            m_Renderer->RenderAnchors(*m_Scene, *m_Camera);
+            if (GetShowAnchors()) {
+                m_Renderer->RenderAnchors(*m_Scene, *m_Camera);
+            }
+            m_Renderer->EndSceneFrame();
+            m_SceneRenderRequested = false; 
         }
-        Log::Debug("Run Loop: ...Renderer EndSceneFrame.");
-        m_Renderer->EndSceneFrame();
 
         int display_w, display_h;
         glfwGetFramebufferSize(m_Window, &display_w, &display_h);
@@ -198,18 +229,16 @@ void Application::Run() {
             ImGui::ShowMetricsWindow(&m_ShowMetricsWindow);
         }
         
-        Log::Debug("Run Loop: UI EndFrame & Swap Buffers...");
         m_UI->EndFrame();
         glfwSwapBuffers(m_Window);
-        Log::Debug("Run Loop: ...End of Frame.");
     }
 }
-
 void Application::OnSceneLoaded() {
     Log::Debug("Application::OnSceneLoaded - New scene loaded.");
     m_Scene->Load("scene.json");
     SelectObject(0); 
     m_TransformGizmo->SetTarget(nullptr);
+    RequestSceneRender();
 }
 
 
@@ -220,6 +249,7 @@ void Application::ImportModel(const std::string& filepath) {
         float importScale = SettingsManager::Get().objImportScale;
         newObject->SetScale(glm::vec3(importScale));
         m_Scene->AddObject(std::move(newObject));
+        RequestSceneRender();
     }
 }
 
@@ -234,6 +264,7 @@ void Application::SelectObject(uint32_t id) {
         } else {
             m_TransformGizmo->SetTarget(nullptr);
         }
+        RequestSceneRender();
     }
     if (!cur) {
         SetEditorMode(EditorMode::TRANSFORM, SculptMode::Pull);
@@ -254,6 +285,7 @@ void Application::SetEditorMode(EditorMode newMode, SculptMode::Mode newSculptMo
     } else {
         m_TransformGizmo->SetTarget(m_Scene->GetSelectedObject());
     }
+    RequestSceneRender();
 }
 
 void Application::Cleanup() {
@@ -279,6 +311,7 @@ void Application::processKeyboardInput() {
     if (glfwGetKey(m_Window, GLFW_KEY_DELETE) == GLFW_PRESS && !delPressed) {
         if (m_Scene->GetSelectedObject()) {
             m_Scene->QueueForDeletion(m_Scene->GetSelectedObject()->id);
+            RequestSceneRender();
         }
         delPressed = true;
     }
@@ -383,6 +416,7 @@ void Application::processSculpting() {
             
             sculptableMesh->RecalculateNormals();
             selectedObject->SetMeshDirty(true);
+            RequestSceneRender();
         }
     }
 }
@@ -399,6 +433,7 @@ void Application::cursor_position_callback(GLFWwindow* window, double xpos, doub
     if (app->m_IsDraggingGizmo) {
         if (auto* vp = app->m_UI->GetView<ViewportPane>()) {
             app->m_TransformGizmo->Update(*app->m_Camera, delta, true, (int)vp->GetSize().x, (int)vp->GetSize().y);
+            app->RequestSceneRender();
         }
     } else if (app->m_IsDraggingObject && app->m_DraggedObject) {
         if (auto* vp = app->m_UI->GetView<ViewportPane>()) {
@@ -410,6 +445,7 @@ void Application::cursor_position_callback(GLFWwindow* window, double xpos, doub
                                                          invViewProj,
                                                          (int)vp->GetSize().x, (int)vp->GetSize().y);
             app->m_DraggedObject->SetPosition(world);
+            app->RequestSceneRender();
         }
     }
 }
@@ -420,6 +456,7 @@ void Application::scroll_callback(GLFWwindow* window, double xoffset, double yof
     if (app && app->m_Camera) {
         if (auto* vp = app->m_UI->GetView<ViewportPane>(); vp && vp->IsHovered() && !io.WantCaptureMouse) {
             app->m_Camera->ProcessMouseScroll(float(yoffset));
+            app->RequestSceneRender();
         }
     }
 }
@@ -429,6 +466,7 @@ void Application::framebuffer_size_callback(GLFWwindow* window, int w, int h) {
     if (app) {
         app->m_WindowWidth = w;
         app->m_WindowHeight = h;
+        app->RequestSceneRender();
     }
 }
 

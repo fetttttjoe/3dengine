@@ -16,7 +16,10 @@ InspectorView::InspectorView(Application* app)
 void InspectorView::Draw() {
     ISceneObject* sel = m_Scene->GetSelectedObject();
     if (sel) {
-        ImGui::InputText("Name", &sel->name);
+        // Renaming the object requests a render.
+        if(ImGui::InputText("Name", &sel->name)) {
+            m_App->RequestSceneRender();
+        }
         ImGui::Text("Type: %s", sel->GetTypeString().c_str());
         ImGui::Text("ID: %u", sel->id);
         ImGui::Separator();
@@ -45,6 +48,8 @@ void InspectorView::DrawTransformControls(ISceneObject* sel) {
         auto sca = sel->GetScale();
         auto eul = glm::degrees(glm::eulerAngles(rot));
 
+        // Each of these setters will trigger the onChange callback in BaseObject,
+        // which correctly calls RequestSceneRender().
         if (ImGui::DragFloat3(PropertyNames::Position, glm::value_ptr(pos), 0.1f))
             sel->SetPosition(pos);
         if (ImGui::DragFloat3(PropertyNames::Rotation, glm::value_ptr(eul), 1.0f))
@@ -70,6 +75,7 @@ void InspectorView::DrawProperties(ISceneObject* sel) {
                 continue;
 
             ImGui::PushID(n.c_str());
+            // The DrawEditor method for each property also uses the onChange callback.
             p->DrawEditor();
             ImGui::PopID();
             hasEditableProps = true;
@@ -84,9 +90,9 @@ void InspectorView::DrawSculptControls(ISceneObject* sel) {
     if (ImGui::CollapsingHeader("Sculpting", ImGuiTreeNodeFlags_DefaultOpen)) {
         EditorMode currentMode = m_App->GetEditorMode();
         
-        // Mode Selection
         ImGui::Text("Mode:");
         ImGui::SameLine();
+        // SetEditorMode correctly requests a re-render.
         if (ImGui::RadioButton("Transform##Mode", currentMode == EditorMode::TRANSFORM)) {
             m_App->SetEditorMode(EditorMode::TRANSFORM, m_BrushSettings.mode);
         }
@@ -103,20 +109,21 @@ void InspectorView::DrawSculptControls(ISceneObject* sel) {
 }
 
 void InspectorView::DrawBrushSettings() {
+    bool settingsChanged = false;
     ImGui::Text("Tool:");
     ImGui::SameLine();
-    if (ImGui::RadioButton("Pull", m_BrushSettings.mode == SculptMode::Pull)) m_BrushSettings.mode = SculptMode::Pull;
+    if (ImGui::RadioButton("Pull", m_BrushSettings.mode == SculptMode::Pull)) { m_BrushSettings.mode = SculptMode::Pull; settingsChanged = true; }
     ImGui::SameLine();
-    if (ImGui::RadioButton("Push", m_BrushSettings.mode == SculptMode::Push)) m_BrushSettings.mode = SculptMode::Push;
+    if (ImGui::RadioButton("Push", m_BrushSettings.mode == SculptMode::Push)) { m_BrushSettings.mode = SculptMode::Push; settingsChanged = true; }
     ImGui::SameLine();
-    if (ImGui::RadioButton("Smooth", m_BrushSettings.mode == SculptMode::Smooth)) m_BrushSettings.mode = SculptMode::Smooth;
+    if (ImGui::RadioButton("Smooth", m_BrushSettings.mode == SculptMode::Smooth)) { m_BrushSettings.mode = SculptMode::Smooth; settingsChanged = true; }
     ImGui::SameLine();
-    if (ImGui::RadioButton("Grab", m_BrushSettings.mode == SculptMode::Grab)) m_BrushSettings.mode = SculptMode::Grab;
+    if (ImGui::RadioButton("Grab", m_BrushSettings.mode == SculptMode::Grab)) { m_BrushSettings.mode = SculptMode::Grab; settingsChanged = true; }
     
     ImGui::Separator();
     ImGui::Text("Brush Settings");
-    ImGui::DragFloat("Radius##Sculpt", &m_BrushSettings.radius, 0.01f, 0.01f, 5.0f);
-    ImGui::DragFloat("Strength##Sculpt", &m_BrushSettings.strength, 0.01f, 0.01f, 1.0f);
+    if(ImGui::DragFloat("Radius##Sculpt", &m_BrushSettings.radius, 0.01f, 0.01f, 5.0f)) settingsChanged = true;
+    if(ImGui::DragFloat("Strength##Sculpt", &m_BrushSettings.strength, 0.01f, 0.01f, 1.0f)) settingsChanged = true;
 
     ImGui::Separator();
     ImGui::Text("Brush Falloff");
@@ -141,9 +148,15 @@ void InspectorView::DrawBrushSettings() {
                 points[i].pos.x = glm::clamp((float)x, 0.0f, 1.0f);
                 points[i].pos.y = glm::clamp((float)y, 0.0f, 1.0f);
                 m_BrushSettings.falloff.SortPoints();
+                settingsChanged = true;
             }
         }
 
         ImPlot::EndPlot();
+    }
+    
+    // One single check at the end to request a render if any brush setting was changed.
+    if (settingsChanged) {
+        m_App->RequestSceneRender();
     }
 }

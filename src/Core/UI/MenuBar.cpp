@@ -22,7 +22,6 @@ void MenuBar::DrawFileMenu() {
             m_App->GetScene()->Save("scene.json");
         }
         if (ImGui::MenuItem("Load Scene")) {
-            m_App->GetScene()->Load("scene.json");
             m_App->OnSceneLoaded();
         }
         if (ImGui::MenuItem("Import Model")) {
@@ -62,7 +61,9 @@ void MenuBar::DrawSceneMenu() {
         ImGui::Separator();
         bool canDelete = (m_App->GetScene()->GetSelectedObject() != nullptr);
         if (ImGui::MenuItem("Delete Selected", "Delete", false, canDelete)) {
-            m_App->GetScene()->DeleteSelectedObject();
+            if(auto* selected = m_App->GetScene()->GetSelectedObject()) {
+                m_App->RequestObjectDeletion(selected->id);
+            }
         }
         ImGui::EndMenu();
     }
@@ -72,10 +73,10 @@ void MenuBar::DrawAddObjectSubMenu() {
     if (ImGui::BeginMenu("Add")) {
         auto factory = m_App->GetObjectFactory();
         if (factory) {
-            for (auto& typeName : factory->GetRegisteredTypeNames()) {
-                if (typeName == "Grid" || typeName == "CustomMesh") continue;
+            // Correctly call the new method to get only user-creatable types
+            for (const auto& typeName : factory->GetUserCreatableTypeNames()) {
                 if (ImGui::MenuItem(("Add " + typeName).c_str())) {
-                    m_App->GetScene()->AddObject(factory->Create(typeName));
+                    m_App->RequestObjectCreation(typeName);
                 }
             }
         }

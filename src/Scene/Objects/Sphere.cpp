@@ -3,6 +3,7 @@
 #include <cmath>
 #include <glm/gtx/component_wise.hpp>
 
+#include "Core/Application.h"
 #include "Core/PropertyNames.h"
 #include "Scene/Objects/ObjectTypes.h"
 
@@ -12,15 +13,19 @@
 
 Sphere::Sphere() {
   name = std::string(ObjectTypes::Sphere);
+  
+  auto onVisualsChanged = [this]() {
+    m_IsTransformDirty = true;
+    Application::Get().RequestSceneRender();
+  };
+
   m_Properties = PropertySet();
-  auto onTransformChanged = [this]() { m_IsTransformDirty = true; };
-  m_Properties.Add(PropertyNames::Position, glm::vec3(0.0f),
-                   onTransformChanged);
-  m_Properties.Add(PropertyNames::Rotation, glm::quat(1.0f, 0.0f, 0.0f, 0.0f),
-                   onTransformChanged);
-  m_Properties.Add(PropertyNames::Scale, glm::vec3(1.0f), onTransformChanged);
-  m_Properties.Add(PropertyNames::Color, glm::vec4(0.8f, 0.8f, 0.8f, 1.0f));
-  m_Properties.Add(PropertyNames::Radius, 1.0f);
+  m_Properties.Add(PropertyNames::Position, glm::vec3(0.0f), onVisualsChanged);
+  m_Properties.Add(PropertyNames::Rotation, glm::quat(1.0f, 0.0f, 0.0f, 0.0f), onVisualsChanged);
+  m_Properties.Add(PropertyNames::Scale, glm::vec3(1.0f), onVisualsChanged);
+  m_Properties.Add(PropertyNames::Color, glm::vec4(0.8f, 0.8f, 0.8f, 1.0f), onVisualsChanged);
+  m_Properties.Add(PropertyNames::Radius, 1.0f, [this]() { RebuildMesh(); });
+  
   RebuildMesh();
 }
 
@@ -42,11 +47,9 @@ void Sphere::OnGizmoUpdate(const std::string& propertyName, float delta,
     glm::vec3 currentScale =
         m_Properties.GetValue<glm::vec3>(PropertyNames::Scale);
 
-    // Apply the delta only to the axis that was dragged
     glm::vec3 scaleChange = axis * delta;
     glm::vec3 newScale = currentScale + scaleChange;
 
-    // Prevent scaling to zero or negative values on any axis
     newScale = glm::max(newScale, glm::vec3(0.05f));
 
     m_Properties.SetValue<glm::vec3>(PropertyNames::Scale, newScale);

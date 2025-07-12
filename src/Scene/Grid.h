@@ -45,7 +45,7 @@ class Grid : public ISceneObject {
   // Grid-specific methods
   void SetConfiguration(int size, int divisions);
   glm::vec3 GetClosestGridPoint(const glm::vec3& worldPoint) const;
-
+bool IsUserCreatable() const override { return false; }
  private:
   void Initialize();
 

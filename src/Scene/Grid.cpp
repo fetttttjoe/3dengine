@@ -9,13 +9,13 @@
 #include "Core/SettingsManager.h"
 #include "Scene/Objects/ObjectTypes.h"
 #include "Shader.h"
+#include "Core/Application.h"
+
 
 Grid::Grid() {
   name = std::string(ObjectTypes::Grid);
   isSelectable = false;
   isStatic = true;
-  // CORRECTED ORDER: Initialize must be called before RebuildMesh/SetConfiguration
-  // to ensure the VBO is created before it's used.
   Initialize();
   SetConfiguration(SettingsManager::Get().gridSize,
                    SettingsManager::Get().gridDivisions);
@@ -77,6 +77,7 @@ void Grid::RebuildMesh() {
   glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(float),
                vertices.data(), GL_STATIC_DRAW);
   glBindBuffer(GL_ARRAY_BUFFER, 0);
+  Application::Get().RequestSceneRender();
 }
 
 void Grid::Draw(OpenGLRenderer& renderer, const glm::mat4& view, const glm::mat4& projection) {

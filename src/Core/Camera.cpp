@@ -3,6 +3,7 @@
 #include <glm/gtc/matrix_inverse.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include "Core/SettingsManager.h"
+#include "Core/Application.h" 
 
 Camera::Camera(GLFWwindow* window, glm::vec3 position)
     : m_Window(window),
@@ -64,17 +65,20 @@ void Camera::ResetToDefault() {
     m_Pitch = -10.0f;
     m_Zoom = 45.0f;
     updateMatrices();
+    Application::Get().RequestSceneRender();
 }
 
 void Camera::ProcessMouseScroll(float yoffset) {
     m_Position += m_Front * yoffset * 0.5f;
     updateMatrices();
+    Application::Get().RequestSceneRender();
 }
 
 void Camera::SetAspectRatio(float aspectRatio) {
     if (m_AspectRatio != aspectRatio) {
         m_AspectRatio = aspectRatio;
         updateMatrices();
+        Application::Get().RequestSceneRender();
     }
 }
 
@@ -118,7 +122,6 @@ void Camera::updateMatrices() {
 }
 
 bool Camera::processKeyboard(float deltaTime) {
-    // Read the movement speed from settings every frame.
     float velocity = SettingsManager::Get().cameraSpeed * deltaTime;
     bool moved = false;
     if (glfwGetKey(m_Window, GLFW_KEY_W) == GLFW_PRESS) {
@@ -139,6 +142,7 @@ bool Camera::processKeyboard(float deltaTime) {
     }
     if (moved) {
         updateMatrices();
+        Application::Get().RequestSceneRender();
     }
     return moved;
 }
@@ -153,5 +157,6 @@ bool Camera::processMouseMovement(float xoffset, float yoffset) {
     if (m_Pitch > 89.0f) m_Pitch = 89.0f;
     if (m_Pitch < -89.0f) m_Pitch = -89.0f;
     updateMatrices();
+    Application::Get().RequestSceneRender();
     return true;
 }

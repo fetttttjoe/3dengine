@@ -3,20 +3,26 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/constants.hpp>
 
+#include "Core/Application.h"
 #include "Core/PropertyNames.h"
 #include "Scene/Objects/ObjectTypes.h"
 
 Icosphere::Icosphere() {
   name = std::string(ObjectTypes::Icosphere);
-  // Remove properties that don't apply to a uniform sphere
+
+  // Define the callback that requests a re-render for visual changes.
+  auto onVisualsChanged = [this]() {
+    m_IsTransformDirty = true;
+    Application::Get().RequestSceneRender();
+  };
+
+  // The Icosphere replaces the default property set, so we must redefine
+  // all properties and their callbacks.
   m_Properties = PropertySet();
-  auto onTransformChanged = [this]() { m_IsTransformDirty = true; };
-  m_Properties.Add(PropertyNames::Position, glm::vec3(0.0f),
-                   onTransformChanged);
-  m_Properties.Add(PropertyNames::Rotation, glm::quat(1.0f, 0.0f, 0.0f, 0.0f),
-                   onTransformChanged);
-  m_Properties.Add(PropertyNames::Scale, glm::vec3(1.0f), onTransformChanged);
-  m_Properties.Add(PropertyNames::Color, glm::vec4(0.8f, 0.8f, 0.8f, 1.0f));
+  m_Properties.Add(PropertyNames::Position, glm::vec3(0.0f), onVisualsChanged);
+  m_Properties.Add(PropertyNames::Rotation, glm::quat(1.0f, 0.0f, 0.0f, 0.0f), onVisualsChanged);
+  m_Properties.Add(PropertyNames::Scale, glm::vec3(1.0f), onVisualsChanged);
+  m_Properties.Add(PropertyNames::Color, glm::vec4(0.8f, 0.8f, 0.8f, 1.0f), onVisualsChanged);
   m_Properties.Add(PropertyNames::Radius, 1.0f, [this]() { RebuildMesh(); });
 
   RebuildMesh();
@@ -44,7 +50,6 @@ void Icosphere::OnGizmoUpdate(const std::string& propertyName, float delta,
         m_Properties.SetValue<glm::vec3>(PropertyNames::Scale, newScale);
     }
 }
-
 
 // Helper to find or create the midpoint of an edge to ensure vertices are
 // unique

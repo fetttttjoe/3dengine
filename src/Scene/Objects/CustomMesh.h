@@ -9,7 +9,7 @@ public:
     ~CustomMesh() override = default;
 
     std::string GetTypeString() const override;
-
+ bool IsUserCreatable() const override { return false; }
 protected:
     void BuildMeshData(std::vector<float>& vertices, std::vector<unsigned int>& indices) override;
 

@@ -1,10 +1,12 @@
 #pragma once
 
 #include <Interfaces.h>
+
 #include <glm/glm.hpp>
 #include <memory>
 #include <string>
 #include <vector>
+
 #include "Sculpting/ISculptTool.h"
 
 // Forward declarations
@@ -22,89 +24,109 @@ class GrabTool;
 enum class EditorMode { TRANSFORM, SCULPT };
 
 class Application {
-public:
-    Application(int initialWidth, int initialHeight);
-    ~Application();
+ public:
+  Application(int initialWidth, int initialHeight);
+  ~Application();
 
-    void Run();
+  void Run();
 
-    // --- Core System Accessors ---
-    Scene* GetScene() const { return m_Scene.get(); }
-    TransformGizmo* GetTransformGizmo() const { return m_TransformGizmo.get(); }
-    SceneObjectFactory* GetObjectFactory() const { return m_ObjectFactory.get(); }
-    AppUI* GetUI() const { return m_UI.get(); }
-    OpenGLRenderer* GetRenderer() const { return m_Renderer.get(); }
-    Camera* GetCamera() const { return m_Camera.get(); }
-    GLFWwindow* GetWindow() const { return m_Window; }
+  // --- Core System Accessors ---
+  Scene* GetScene() const { return m_Scene.get(); }
+  TransformGizmo* GetTransformGizmo() const { return m_TransformGizmo.get(); }
+  SceneObjectFactory* GetObjectFactory() const { return m_ObjectFactory.get(); }
+  AppUI* GetUI() const { return m_UI.get(); }
+  OpenGLRenderer* GetRenderer() const { return m_Renderer.get(); }
+  Camera* GetCamera() const { return m_Camera.get(); }
+  GLFWwindow* GetWindow() const { return m_Window; }
 
-    // --- State Management ---
-    void SelectObject(uint32_t id);
-    void SetEditorMode(EditorMode newMode, SculptMode::Mode newSculptMode);
-    EditorMode GetEditorMode() const { return m_EditorMode; }
-    SculptMode::Mode GetSculptMode() const { return m_SculptMode; }
-    bool GetShowAnchors() const { return m_ShowAnchors; }
-    void SetShowAnchors(bool show) { m_ShowAnchors = show; }
-    void SetShowSettings(bool show) { m_ShowSettingsWindow = show; }
-    bool GetShowSettings() const { return m_ShowSettingsWindow; }
-    void SetShowMetricsWindow(bool show) { m_ShowMetricsWindow = show; }
-    bool GetShowMetricsWindow() const { return m_ShowMetricsWindow; }
+  // --- State Management ---
+  void SelectObject(uint32_t id);
+  void SetEditorMode(EditorMode newMode, SculptMode::Mode newSculptMode);
+  EditorMode GetEditorMode() const { return m_EditorMode; }
+  SculptMode::Mode GetSculptMode() const { return m_SculptMode; }
+  bool GetShowAnchors() const { return m_ShowAnchors; }
+  void SetShowAnchors(bool show) {
+    m_ShowAnchors = show;
+    RequestSceneRender();
+  }
+  void SetShowSettings(bool show) { m_ShowSettingsWindow = show; }
+  bool GetShowSettings() const { return m_ShowSettingsWindow; }
+  void SetShowMetricsWindow(bool show) { m_ShowMetricsWindow = show; }
+  bool GetShowMetricsWindow() const { return m_ShowMetricsWindow; }
 
-    // --- Actions ---
-    void OnSceneLoaded();
-    void ImportModel(const std::string& filepath);
-    void Exit();
+  // --- Scene Render Request ---
+  void RequestSceneRender() { m_SceneRenderRequested = true; }
 
-    // --- Singleton Accessor ---
-    static Application& Get();
+  // --- Actions ---
+  void OnSceneLoaded();
+  void ImportModel(const std::string& filepath);
+  void Exit();
+  void RequestObjectDuplication(uint32_t objectID);
+  void RequestObjectDeletion(uint32_t objectID);
+  void RequestObjectCreation(const std::string& typeName);
 
-private:
-    void Initialize();
-    void Cleanup();
-    void RegisterObjectTypes();
+  // --- Singleton Accessor ---
+  static Application& Get();
 
-    void processKeyboardInput();
-    void processMouseInput();
-    void processSculpting();
+ private:
+  void Initialize();
+  void Cleanup();
+  void RegisterObjectTypes();
 
-    static void framebuffer_size_callback(GLFWwindow* window, int w, int h);
-    static void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
-    static void cursor_position_callback(GLFWwindow* window, double xpos, double ypos);
-    static void error_callback(int error, const char* desc);
+  void ProcessPendingActions();
+  void processKeyboardInput();
+  void processMouseInput();
+  void processSculpting();
 
-    // --- Singleton Instance ---
-    static Application* s_Instance;
+  static void framebuffer_size_callback(GLFWwindow* window, int w, int h);
+  static void scroll_callback(GLFWwindow* window, double xoffset,
+                              double yoffset);
+  static void cursor_position_callback(GLFWwindow* window, double xpos,
+                                       double ypos);
+  static void error_callback(int error, const char* desc);
 
-    GLFWwindow* m_Window = nullptr;
-    int m_WindowWidth;
-    int m_WindowHeight;
+  // --- Singleton Instance ---
+  static Application* s_Instance;
 
-    // --- CORRECTED DESTRUCTION ORDER ---
-    std::unique_ptr<SceneObjectFactory> m_ObjectFactory;
-    std::unique_ptr<OpenGLRenderer> m_Renderer;
-    std::unique_ptr<AppUI> m_UI;
-    std::unique_ptr<Scene> m_Scene;
-    std::unique_ptr<Camera> m_Camera;
-    std::unique_ptr<TransformGizmo> m_TransformGizmo;
-    std::unique_ptr<PushPullTool> m_PushPullTool;
-    std::unique_ptr<SmoothTool> m_SmoothTool;
-    std::unique_ptr<GrabTool> m_GrabTool;
-    
-    EditorMode m_EditorMode = EditorMode::TRANSFORM;
-    SculptMode::Mode m_SculptMode = SculptMode::Pull;
+  GLFWwindow* m_Window = nullptr;
+  int m_WindowWidth;
+  int m_WindowHeight;
 
-    float m_LastFrame = 0.0f;
-    float m_DeltaTime = 0.0f;
+  // --- Core Systems ---
+  std::unique_ptr<SceneObjectFactory> m_ObjectFactory;
+  std::unique_ptr<OpenGLRenderer> m_Renderer;
+  std::unique_ptr<AppUI> m_UI;
+  std::unique_ptr<Scene> m_Scene;
+  std::unique_ptr<Camera> m_Camera;
+  std::unique_ptr<TransformGizmo> m_TransformGizmo;
+  std::unique_ptr<PushPullTool> m_PushPullTool;
+  std::unique_ptr<SmoothTool> m_SmoothTool;
+  std::unique_ptr<GrabTool> m_GrabTool;
 
-    bool m_ShowAnchors = true;
-    bool m_ShowSettingsWindow = false;
-    bool m_ShowMetricsWindow = false;
+  // --- State ---
+  EditorMode m_EditorMode = EditorMode::TRANSFORM;
+  SculptMode::Mode m_SculptMode = SculptMode::Pull;
+  float m_LastFrame = 0.0f;
+  float m_DeltaTime = 0.0f;
+  bool m_ShowAnchors = true;
+  bool m_ShowSettingsWindow = false;
+  bool m_ShowMetricsWindow = false;
 
-    glm::vec2 m_LastMousePos = {0, 0};
-    glm::vec2 m_LastViewportSize = {0, 0};
-    bool m_IsDraggingObject = false;
-    ISceneObject* m_DraggedObject = nullptr;
-    float m_DragNDCDepth = 0.0f;
-    bool m_IsDraggingGizmo = false;
+  // --- Dirty Flag for Rendering ---
+  bool m_SceneRenderRequested = true;
 
-    bool m_IsSculpting = false;
+  // --- Input State ---
+  glm::vec2 m_LastMousePos = {0, 0};
+  glm::vec2 m_LastViewportSize = {0, 0};
+  bool m_IsDraggingObject = false;
+  ISceneObject* m_DraggedObject = nullptr;
+  float m_DragNDCDepth = 0.0f;
+  bool m_IsDraggingGizmo = false;
+  bool m_IsSculpting = false;
+
+  // --- Pending Action Queues ---
+  std::vector<std::string>
+      m_RequestedCreationTypeNames;
+  uint32_t m_RequestedDuplicateID = 0;
+  std::vector<uint32_t> m_RequestedDeletionIDs;
 };

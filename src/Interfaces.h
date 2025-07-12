@@ -110,6 +110,8 @@ class ISceneObject : public IGizmoClient {
   virtual void SetEulerAngles(const glm::vec3& eulerAngles) = 0;
   virtual void Serialize(nlohmann::json& outJson) const;
   virtual void Deserialize(const nlohmann::json& inJson);
+  
+  virtual bool IsUserCreatable() const { return true; }
 
   virtual SculptableMesh* GetSculptableMesh() = 0;
   virtual bool IsMeshDirty() const = 0;
