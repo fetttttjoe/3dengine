@@ -16,13 +16,16 @@
 
 #include "Core/Log.h"
 #include "Core/PropertyNames.h"
+#include "Sculpting/SculptableMesh.h"  // Needed for ISceneObject implementation
 #include "imgui.h"
 #include "imgui_stdlib.h"
 
+// Forward-declarations
+class IEditableMesh;
 class Scene;
 class Shader;
 class IProperty;
-class SculptableMesh;
+class OpenGLRenderer;
 
 class PropertySet {
  public:
@@ -91,7 +94,7 @@ class ISceneObject : public IGizmoClient {
   ISceneObject() : id(0), name("Unnamed Object"), isSelected(false) {}
   virtual ~ISceneObject() = default;
 
-  virtual void Draw(class OpenGLRenderer& renderer, const glm::mat4& view,
+  virtual void Draw(OpenGLRenderer& renderer, const glm::mat4& view,
                     const glm::mat4& projection) = 0;
   virtual void DrawForPicking(Shader& pickingShader, const glm::mat4& view,
                               const glm::mat4& projection) = 0;
@@ -109,10 +112,47 @@ class ISceneObject : public IGizmoClient {
   virtual void SetRotation(const glm::quat& rotation) = 0;
   virtual void SetScale(const glm::vec3& scale) = 0;
   virtual void SetEulerAngles(const glm::vec3& eulerAngles) = 0;
-  virtual void Serialize(nlohmann::json& outJson) const;
-  virtual void Deserialize(const nlohmann::json& inJson);
 
-  virtual SculptableMesh* GetSculptableMesh() = 0;
+  // CORRECT: Implementation moved here to resolve linker errors.
+  virtual void Serialize(nlohmann::json& outJson) const {
+    outJson["type"] = GetTypeString();
+    outJson["id"] = id;
+    outJson["name"] = name;
+    outJson["isPristine"] = isPristine;
+    nlohmann::json propsJson;
+    GetPropertySet().Serialize(propsJson);
+    outJson["properties"] = propsJson;
+
+    IEditableMesh* editableMesh =
+        const_cast<ISceneObject*>(this)->GetEditableMesh();
+    if (editableMesh) {
+      if (auto* sculptableMesh = dynamic_cast<SculptableMesh*>(editableMesh)) {
+        sculptableMesh->Serialize(outJson);
+      }
+    }
+  }
+
+  // CORRECT: Implementation moved here to resolve linker errors.
+  virtual void Deserialize(const nlohmann::json& inJson) {
+    id = inJson.value("id", 1);
+    name = inJson.value("name", "Object");
+    isPristine = inJson.value("isPristine", true);
+    if (inJson.contains("properties")) {
+      GetPropertySet().Deserialize(inJson["properties"]);
+    }
+
+    RebuildMesh();
+
+    if (IEditableMesh* editableMesh = GetEditableMesh()) {
+      if (auto* sculptableMesh = dynamic_cast<SculptableMesh*>(editableMesh)) {
+        sculptableMesh->Deserialize(inJson);
+        SetMeshDirty(true);
+      }
+    }
+  }
+
+  virtual std::shared_ptr<Shader> GetShader() const = 0;
+  virtual IEditableMesh* GetEditableMesh() = 0;
   virtual bool IsMeshDirty() const = 0;
   virtual void SetMeshDirty(bool dirty) = 0;
   virtual bool IsUserCreatable() const { return true; }

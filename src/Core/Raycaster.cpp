@@ -2,7 +2,7 @@
 
 #include <glm/gtc/matrix_inverse.hpp>
 
-#include "Sculpting/SculptableMesh.h"
+#include "Interfaces/IEditableMesh.h"
 
 namespace Raycaster {
 
@@ -39,7 +39,7 @@ bool IntersectTriangle(const glm::vec3& rayOrigin,
 }
 
 bool IntersectMesh(const glm::vec3& rayOrigin, const glm::vec3& rayDirection,
-                   const SculptableMesh& mesh, const glm::mat4& modelMatrix,
+                   const IEditableMesh& mesh, const glm::mat4& modelMatrix,
                    RaycastResult& outResult) {
   glm::mat4 invModelMatrix = glm::inverse(modelMatrix);
   glm::vec3 rayOriginLocal =
@@ -64,6 +64,7 @@ bool IntersectMesh(const glm::vec3& rayOrigin, const glm::vec3& rayDirection,
         foundHit = true;
         outResult.distance = t;
         outResult.hitPoint = rayOriginLocal + rayDirectionLocal * t;
+        outResult.triangleIndex = i / 3;  // Set the triangle index
       }
     }
   }

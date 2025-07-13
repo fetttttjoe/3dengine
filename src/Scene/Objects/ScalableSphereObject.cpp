@@ -7,17 +7,13 @@ void ScalableSphereObject::OnGizmoUpdate(const std::string& propertyName,
   if (propertyName == PropertyNames::Scale) {
     glm::vec3 currentScale =
         m_Properties.GetValue<glm::vec3>(PropertyNames::Scale);
-
-    // This is the independent-axis scaling logic, now in one shared place.
     glm::vec3 scaleChange(std::abs(axis.x) > 0.5f ? delta : 0.0f,
                           std::abs(axis.y) > 0.5f ? delta : 0.0f,
                           std::abs(axis.z) > 0.5f ? delta : 0.0f);
-
     glm::vec3 newScale = currentScale + scaleChange;
     newScale = glm::max(newScale, glm::vec3(0.05f));
     m_Properties.SetValue<glm::vec3>(PropertyNames::Scale, newScale);
   } else {
-    // Fallback to the BaseObject implementation for other properties.
     BaseObject::OnGizmoUpdate(propertyName, delta, axis);
   }
 }

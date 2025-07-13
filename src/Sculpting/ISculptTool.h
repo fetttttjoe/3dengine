@@ -3,12 +3,15 @@
 #include <cstdint>
 #include <glm/glm.hpp>
 
-class SculptableMesh;
+class IEditableMesh;
 struct BrushSettings;
 
 namespace SculptMode {
-enum Mode { Pull = 0, Push, Smooth, Grab, MoveVertex };
-}
+// This enum defines different *brush tool types*.
+// MoveVertex and SelectFace have been moved out as they are now sub-object
+// modes.
+enum Mode { Pull = 0, Push, Smooth, Grab };  // Corrected enum definition
+}  // namespace SculptMode
 
 /**
  * @brief Base interface for all sculpting tools.
@@ -31,7 +34,7 @@ class ISculptTool {
    * @param viewportWidth The width of the viewport.
    * @param viewportHeight The height of the viewport.
    */
-  virtual void Apply(SculptableMesh& mesh, const glm::vec3& hitPoint,
+  virtual void Apply(IEditableMesh& mesh, const glm::vec3& hitPoint,
                      const glm::vec3& rayDirection, const glm::vec2& mouseDelta,
                      const BrushSettings& settings, const glm::mat4& viewMatrix,
                      const glm::mat4& projectionMatrix, int viewportWidth,

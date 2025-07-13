@@ -7,8 +7,6 @@
 #include "Core/Camera.h"
 #include <glm/gtc/matrix_transform.hpp>
 
-// Include GlmStreamOperators if not already included globally by the test executable
-#include "GlmStreamOperators.h"
 
 class SculptingTest : public ::testing::Test {
  protected:

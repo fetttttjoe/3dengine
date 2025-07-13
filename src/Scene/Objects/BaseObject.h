@@ -1,7 +1,5 @@
 #pragma once
 
-#include <glad/glad.h>
-
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 #include <memory>
@@ -9,21 +7,26 @@
 #include <vector>
 
 #include "Interfaces.h"
+#include "Sculpting/SculptableMesh.h"
 
 class Shader;
-class SculptableMesh;
 
 class BaseObject : public ISceneObject {
  public:
   BaseObject();
   ~BaseObject() override;
 
+  // Draw methods delegate to the renderer
   void Draw(class OpenGLRenderer& renderer, const glm::mat4& view,
             const glm::mat4& projection) override;
   void DrawForPicking(Shader& pickingShader, const glm::mat4& view,
                       const glm::mat4& projection) override;
   void DrawHighlight(const glm::mat4& view,
                      const glm::mat4& projection) const override;
+
+  std::shared_ptr<Shader> GetShader() const override { return m_Shader; }
+
+  // --- ISceneObject Overrides ---
   std::string GetTypeString() const override = 0;
   void RebuildMesh() override;
   PropertySet& GetPropertySet() override { return m_Properties; }
@@ -36,14 +39,10 @@ class BaseObject : public ISceneObject {
   void SetRotation(const glm::quat& rotation) override;
   void SetScale(const glm::vec3& scale) override;
   void SetEulerAngles(const glm::vec3& eulerAngles) override;
-
   std::vector<GizmoHandleDef> GetGizmoHandleDefs() override;
   void OnGizmoUpdate(const std::string& propertyName, float delta,
                      const glm::vec3& axis) override;
-
-  SculptableMesh* GetSculptableMesh() override {
-    return m_SculptableMesh.get();
-  }
+  IEditableMesh* GetEditableMesh() override { return m_SculptableMesh.get(); }
   bool IsMeshDirty() const override { return m_IsMeshDirty; }
   void SetMeshDirty(bool dirty) override { m_IsMeshDirty = dirty; }
 

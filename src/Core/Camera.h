@@ -3,6 +3,7 @@
 #include <glm/glm.hpp>
 
 #include "Core/Log.h"
+#include "Core/MathHelpers.h"
 
 struct GLFWwindow;
 
@@ -15,49 +16,32 @@ class Camera {
 
   void ProcessMouseScroll(float yoffset);
   void SetAspectRatio(float aspectRatio);
-  
+
   void SetPosition(const glm::vec3& position) {
-      m_Position = position;
-      updateMatrices();
+    m_Position = position;
+    updateMatrices();
   }
-  // NEW: Add public setters for Yaw and Pitch for test control
   void SetYaw(float yaw) {
-      m_Yaw = yaw;
-      updateMatrices(); // Recalculate matrices after yaw/pitch change
+    m_Yaw = yaw;
+    updateMatrices();
   }
   void SetPitch(float pitch) {
-      m_Pitch = pitch;
-      updateMatrices(); // Recalculate matrices after yaw/pitch change
+    m_Pitch = pitch;
+    updateMatrices();
   }
 
-
-  const glm::mat4& GetViewMatrix() const {
-    Log::Debug("Camera::GetViewMatrix() called.");
-    return m_ViewMatrix;
-  }
-  const glm::mat4& GetProjectionMatrix() const {
-    Log::Debug("Camera::GetProjectionMatrix() called.");
-    return m_ProjectionMatrix;
-  }
-
+  const glm::mat4& GetViewMatrix() const { return m_ViewMatrix; }
+  const glm::mat4& GetProjectionMatrix() const { return m_ProjectionMatrix; }
   glm::vec3 GetPosition() const { return m_Position; }
-  glm::vec3 GetFront() const { return m_Front; } // Getter for m_Front is already there
+  glm::vec3 GetFront() const { return m_Front; }
 
-
-  static glm::vec2 WorldToScreen(const glm::vec3& worldPos,
-                                 const glm::mat4& viewProj, int windowWidth,
-                                 int windowHeight);
-  static glm::vec3 ScreenToWorldPoint(const glm::vec2& screenPos, float ndcZ,
-                                      const glm::mat4& invViewProj,
-                                      int windowWidth, int windowHeight);
   glm::vec3 ScreenToWorldRay(const glm::vec2& screenPos, int windowWidth,
                              int windowHeight) const;
 
  private:
   void updateMatrices();
-
   bool processKeyboard(float deltaTime);
-  bool processMouseMovement(float xoffset, float yoffset);
+  bool processMouseMovement();
 
   GLFWwindow* m_Window;
 

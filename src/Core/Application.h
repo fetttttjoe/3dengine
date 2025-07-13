@@ -20,9 +20,11 @@ class AppUI;
 class PushPullTool;
 class SmoothTool;
 class GrabTool;
-class MoveVertexTool;
+class SubObjectSelection;
+class MeshEditor;
 
-enum class EditorMode { TRANSFORM, SCULPT };
+enum class EditorMode { TRANSFORM, SCULPT, SUB_OBJECT };
+enum class SubObjectMode { VERTEX, EDGE, FACE };
 
 class Application {
  public:
@@ -38,13 +40,17 @@ class Application {
   AppUI* GetUI() const { return m_UI.get(); }
   OpenGLRenderer* GetRenderer() const { return m_Renderer.get(); }
   Camera* GetCamera() const { return m_Camera.get(); }
-  GLFWwindow* GetWindow() const { return m_Window; }
+  GLFWwindow* GetWindow() { return m_Window; }
+  SubObjectSelection* GetSelection() { return m_Selection.get(); }
 
   // --- State Management ---
   void SelectObject(uint32_t id);
-  void SetEditorMode(EditorMode newMode, SculptMode::Mode newSculptMode);
+  void SetEditorMode(EditorMode newMode,
+                     SculptMode::Mode newSculptMode = SculptMode::Pull,
+                     SubObjectMode newSubObjectMode = SubObjectMode::VERTEX);
   EditorMode GetEditorMode() const { return m_EditorMode; }
   SculptMode::Mode GetSculptMode() const { return m_SculptMode; }
+  SubObjectMode GetSubObjectMode() const { return m_SubObjectMode; }
   bool GetShowAnchors() const { return m_ShowAnchors; }
   void SetShowAnchors(bool show) {
     m_ShowAnchors = show;
@@ -65,6 +71,9 @@ class Application {
   void RequestObjectDuplication(uint32_t objectID);
   void RequestObjectDeletion(uint32_t objectID);
   void RequestObjectCreation(const std::string& typeName);
+  void RequestExtrude(float distance);
+  void RequestWeld();
+  void RequestMoveSelection(float distance);
 
   // --- Singleton Accessor ---
   static Application& Get();
@@ -75,8 +84,8 @@ class Application {
   void RegisterObjectTypes();
 
   void ProcessPendingActions();
-  void processKeyboardInput();
-  void processMouseInput();
+  void processGlobalKeyboardShortcuts();
+  void processMouseActions();
   void processSculpting();
 
   static void framebuffer_size_callback(GLFWwindow* window, int w, int h);
@@ -103,10 +112,13 @@ class Application {
   std::unique_ptr<PushPullTool> m_PushPullTool;
   std::unique_ptr<SmoothTool> m_SmoothTool;
   std::unique_ptr<GrabTool> m_GrabTool;
-  std::unique_ptr<MoveVertexTool> m_MoveVertexTool;
+  std::unique_ptr<SubObjectSelection> m_Selection;
+  std::unique_ptr<MeshEditor> m_MeshEditor;
+
   // --- State ---
   EditorMode m_EditorMode = EditorMode::TRANSFORM;
   SculptMode::Mode m_SculptMode = SculptMode::Pull;
+  SubObjectMode m_SubObjectMode = SubObjectMode::VERTEX;
   float m_LastFrame = 0.0f;
   float m_DeltaTime = 0.0f;
   bool m_ShowAnchors = true;
@@ -117,11 +129,7 @@ class Application {
   bool m_SceneRenderRequested = true;
 
   // --- Input State ---
-  glm::vec2 m_LastMousePos = {0, 0};
   glm::vec2 m_LastViewportSize = {0, 0};
-  bool m_IsDraggingObject = false;
-  ISceneObject* m_DraggedObject = nullptr;
-  float m_DragNDCDepth = 0.0f;
   bool m_IsDraggingGizmo = false;
   bool m_IsSculpting = false;
 
@@ -129,4 +137,9 @@ class Application {
   std::vector<std::string> m_RequestedCreationTypeNames;
   uint32_t m_RequestedDuplicateID = 0;
   std::vector<uint32_t> m_RequestedDeletionIDs;
+  bool m_ExtrudeRequested = false;
+  float m_ExtrudeDistance = 0.1f;
+  bool m_WeldRequested = false;
+  bool m_MoveSelectionRequested = false;
+  float m_MoveSelectionDistance = 0.1f;
 };

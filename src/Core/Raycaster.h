@@ -4,7 +4,7 @@
 #include <limits>
 
 // Forward declarations
-class SculptableMesh;
+class IEditableMesh;
 
 namespace Raycaster {
 
@@ -12,6 +12,7 @@ struct RaycastResult {
   bool hit = false;
   float distance = std::numeric_limits<float>::max();
   glm::vec3 hitPoint = glm::vec3(0.0f);
+  int triangleIndex = -1;
 };
 
 /**
@@ -24,7 +25,7 @@ struct RaycastResult {
  * @return True if the ray intersects the mesh, false otherwise.
  */
 bool IntersectMesh(const glm::vec3& rayOrigin, const glm::vec3& rayDirection,
-                   const SculptableMesh& mesh, const glm::mat4& modelMatrix,
+                   const IEditableMesh& mesh, const glm::mat4& modelMatrix,
                    RaycastResult& outResult);
 
 }  // namespace Raycaster

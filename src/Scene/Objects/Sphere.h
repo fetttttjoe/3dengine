@@ -1,8 +1,8 @@
 #pragma once
 
-#include "Scene/Objects/ScalableSphereObject.h"  // Inherit from the new class
+#include "Scene/Objects/ScalableSphereObject.h"
 
-class Sphere : public ScalableSphereObject {  // Changed base class
+class Sphere : public ScalableSphereObject {
  public:
   Sphere();
   ~Sphere() override = default;

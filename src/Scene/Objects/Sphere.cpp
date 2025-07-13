@@ -4,11 +4,12 @@
 #include <glm/gtx/component_wise.hpp>
 
 #include "Core/PropertyNames.h"
-#include "Scene/Objects/BaseObject.h"
 #include "Scene/Objects/ObjectTypes.h"
+
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif
+
 Sphere::Sphere() {
   name = std::string(ObjectTypes::Sphere);
   m_Properties.Add(PropertyNames::Radius, 1.0f, [this]() { RebuildMesh(); });
@@ -34,6 +35,7 @@ void Sphere::BuildMeshData(std::vector<float>& vertices,
   float sectorStep = 2.0f * M_PI / sectors;
   float stackStep = M_PI / stacks;
   float sectorAngle, stackAngle;
+
   for (int i = 0; i <= stacks; ++i) {
     stackAngle = M_PI / 2 - i * stackStep;
     xy = radius * cosf(stackAngle);
@@ -47,6 +49,7 @@ void Sphere::BuildMeshData(std::vector<float>& vertices,
       vertices.push_back(z);
     }
   }
+
   int k1, k2;
   for (int i = 0; i < stacks; ++i) {
     k1 = i * (sectors + 1);

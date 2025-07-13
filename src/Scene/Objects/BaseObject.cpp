@@ -2,15 +2,14 @@
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
-#include <glm/gtx/matrix_decompose.hpp>
-#include <glm/gtx/quaternion.hpp>
+#include <glm/gtx/quaternion.hpp>  // CORRECT: Added the missing header for glm::toMat4
 
 #include "Core/Application.h"
 #include "Core/JsonGlmHelpers.h"
+#include "Core/Log.h"
 #include "Core/PropertyNames.h"
 #include "Core/ResourceManager.h"
 #include "Renderer/OpenGLRenderer.h"
-#include "Sculpting/SculptableMesh.h"
 #include "Shader.h"
 
 BaseObject::BaseObject() {
@@ -51,69 +50,27 @@ void BaseObject::RebuildMesh() {
   m_IsTransformDirty = true;
   Application::Get().RequestSceneRender();
 }
+
 void BaseObject::Draw(OpenGLRenderer& renderer, const glm::mat4& view,
                       const glm::mat4& projection) {
-  if (!m_Shader) return;
-
-  auto it = renderer.GetGpuResources().find(id);
-  if (it == renderer.GetGpuResources().end()) return;
-
-  const GpuMeshResources& res = it->second;
-  if (res.vao == 0 || res.indexCount == 0) return;
-
-  m_Shader->Bind();
-  m_Shader->SetUniformMat4f("u_Model", GetTransform());
-  m_Shader->SetUniformMat4f("u_View", view);
-  m_Shader->SetUniformMat4f("u_Projection", projection);
-  m_Shader->SetUniformVec4("u_Color",
-                           GetPropertySet().GetValue<glm::vec4>("Color"));
-
-  glBindVertexArray(res.vao);
-  glDrawElements(GL_TRIANGLES, res.indexCount, GL_UNSIGNED_INT, nullptr);
-  glBindVertexArray(0);
-}
-
-void BaseObject::DrawForPicking(Shader& pickingShader, const glm::mat4& view,
-                                const glm::mat4& projection) {
-  OpenGLRenderer* renderer = Application::Get().GetRenderer();
-  if (!renderer) return;
-
-  auto it = renderer->GetGpuResources().find(id);
-  if (it == renderer->GetGpuResources().end()) return;
-
-  const GpuMeshResources& res = it->second;
-  if (res.vao == 0 || res.indexCount == 0) return;
-
-  pickingShader.Bind();
-  pickingShader.SetUniformMat4f("u_Model", GetTransform());
-  pickingShader.SetUniformMat4f("u_View", view);
-  pickingShader.SetUniformMat4f("u_Projection", projection);
-  pickingShader.SetUniform1ui("u_ObjectID", id);
-
-  glBindVertexArray(res.vao);
-  glDrawElements(GL_TRIANGLES, res.indexCount, GL_UNSIGNED_INT, nullptr);
-  glBindVertexArray(0);
+  renderer.RenderObject(*this, *Application::Get().GetCamera());
 }
 
 void BaseObject::DrawHighlight(const glm::mat4& view,
                                const glm::mat4& projection) const {
-  OpenGLRenderer* renderer = Application::Get().GetRenderer();
-  if (!renderer) return;
+  Application::Get().GetRenderer()->RenderObjectHighlight(
+      *this, *Application::Get().GetCamera());
+}
 
-  auto it = renderer->GetGpuResources().find(id);
-  if (it == renderer->GetGpuResources().end()) return;
-
-  const GpuMeshResources& res = it->second;
-  if (res.vao == 0 || res.indexCount == 0) return;
-
-  glBindVertexArray(res.vao);
-  glDrawElements(GL_TRIANGLES, res.indexCount, GL_UNSIGNED_INT, nullptr);
-  glBindVertexArray(0);
+void BaseObject::DrawForPicking(Shader& pickingShader, const glm::mat4& view,
+                                const glm::mat4& projection) {
+  Application::Get().GetRenderer()->RenderObjectForPicking(
+      *this, pickingShader, *Application::Get().GetCamera());
 }
 
 void BaseObject::RecalculateTransformMatrix() const {
   glm::mat4 transform_T = glm::translate(glm::mat4(1.0f), GetPosition());
-  glm::mat4 transform_R = glm::toMat4(GetRotation());
+  glm::mat4 transform_R = glm::toMat4(GetRotation());  // This line now works
   glm::mat4 transform_S = glm::scale(glm::mat4(1.0f), GetScale());
   glm::mat4 transform_C =
       glm::translate(glm::mat4(1.0f), -this->GetLocalCenter());
@@ -180,35 +137,5 @@ void BaseObject::OnGizmoUpdate(const std::string& propertyName, float delta,
     } catch (const std::exception& e) {
       Log::Debug("Gizmo update failed: ", e.what());
     }
-  }
-}
-
-void ISceneObject::Serialize(nlohmann::json& outJson) const {
-  outJson["type"] = GetTypeString();
-  outJson["id"] = id;
-  outJson["name"] = name;
-  outJson["isPristine"] = isPristine;  // Save the pristine state
-  nlohmann::json propsJson;
-  GetPropertySet().Serialize(propsJson);
-  outJson["properties"] = propsJson;
-
-  if (const_cast<ISceneObject*>(this)->GetSculptableMesh()) {
-    const_cast<ISceneObject*>(this)->GetSculptableMesh()->Serialize(outJson);
-  }
-}
-
-void ISceneObject::Deserialize(const nlohmann::json& inJson) {
-  id = inJson.value("id", 1);
-  name = inJson.value("name", "Object");
-  isPristine = inJson.value("isPristine", true);  // Load the pristine state
-  if (inJson.contains("properties")) {
-    GetPropertySet().Deserialize(inJson["properties"]);
-  }
-
-  RebuildMesh();
-
-  if (GetSculptableMesh()) {
-    GetSculptableMesh()->Deserialize(inJson);
-    SetMeshDirty(true);
   }
 }

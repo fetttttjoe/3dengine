@@ -10,7 +10,6 @@ class Pyramid : public BaseObject {
   // ISceneObject overrides
   std::string GetTypeString() const override;
   glm::vec3 GetLocalCenter() const override;
-
   std::vector<GizmoHandleDef> GetGizmoHandleDefs() override;
 
  protected:
