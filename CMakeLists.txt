@@ -66,6 +66,8 @@ target_include_directories(IntuitiveModeler PUBLIC
   ${implot_SOURCE_DIR}
   ${tinyobjloader_SOURCE_DIR}
   ${nfd_SOURCE_DIR}/src/include
+  # Add this if src/ files need it you would add this line:
+  # ${CMAKE_CURRENT_SOURCE_DIR}/tests 
 )
 
 target_compile_definitions(IntuitiveModeler PUBLIC GLM_ENABLE_EXPERIMENTAL)
@@ -90,17 +92,33 @@ add_custom_command(TARGET IntuitiveModeler_App POST_BUILD
 
 # --- Testing Setup ---
 enable_testing()
-file(GLOB_RECURSE TEST_SOURCES CONFIGURE_DEPENDS "tests/*.cpp")
-add_executable(runTests ${TEST_SOURCES})
+# Explicitly list test source files for clarity and reliability
+add_executable(runTests
+    tests/main.cpp
+    tests/MoveVertexToolTests.cpp
+    tests/MoveVertexToolAdvancedTests.cpp
+    tests/SculptingTests.cpp
+    tests/RaycasterTests.cpp
+    tests/CameraTests.cpp
+    tests/SceneLoadingTests.cpp
+    tests/SceneTests.cpp
+    tests/SettingsManagerTests.cpp
+    tests/TransformGizmoTests.cpp
+    tests/TestMock.cpp
+)
 target_link_libraries(runTests PRIVATE IntuitiveModeler gtest)
-# Set the output directory for the test executable
-set_target_properties(runTests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/$<CONFIG>")
 
-# This tells CTest how to run your tests. The key is to set the working directory here.
+target_include_directories(runTests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/tests # This makes tests/*.h findable
+)
+
+# Set the output directory for the test executable
+set_target_properties(runTests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/$<CONFIG>") 
+
+# This tells CTest how to run your tests.
 gtest_discover_tests(runTests
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/$<CONFIG>
 )
-
 # Copy the resources after the test executable is built
 add_custom_command(TARGET runTests POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E copy

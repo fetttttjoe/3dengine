@@ -42,6 +42,7 @@ void InspectorView::Draw() {
 void InspectorView::DrawTransformControls(ISceneObject* sel) {
   if (ImGui::CollapsingHeader("Transform##Header",
                               ImGuiTreeNodeFlags_DefaultOpen)) {
+    // Disable transform controls if in sculpt mode.
     if (m_App->GetEditorMode() == EditorMode::SCULPT) {
       ImGui::PushStyleVar(ImGuiStyleVar_Alpha, ImGui::GetStyle().Alpha * 0.5f);
       ImGui::BeginDisabled();
@@ -117,69 +118,81 @@ void InspectorView::DrawSculptControls(ISceneObject* sel) {
 void InspectorView::DrawBrushSettings() {
   bool settingsChanged = false;
   ImGui::Text("Tool:");
-  ImGui::SameLine();
+  // Removed ImGui::SameLine() for better vertical stacking on limited width.
+  // Each RadioButton will start on a new line or wrap naturally.
   if (ImGui::RadioButton("Pull", m_BrushSettings.mode == SculptMode::Pull)) {
     m_BrushSettings.mode = SculptMode::Pull;
     settingsChanged = true;
   }
-  ImGui::SameLine();
+  // ImGui::SameLine(); // Removed
   if (ImGui::RadioButton("Push", m_BrushSettings.mode == SculptMode::Push)) {
     m_BrushSettings.mode = SculptMode::Push;
     settingsChanged = true;
   }
-  ImGui::SameLine();
+  // ImGui::SameLine(); // Removed
   if (ImGui::RadioButton("Smooth",
                          m_BrushSettings.mode == SculptMode::Smooth)) {
     m_BrushSettings.mode = SculptMode::Smooth;
     settingsChanged = true;
   }
-  ImGui::SameLine();
+  // ImGui::SameLine(); // Removed
   if (ImGui::RadioButton("Grab", m_BrushSettings.mode == SculptMode::Grab)) {
     m_BrushSettings.mode = SculptMode::Grab;
+    settingsChanged = true;
+  }
+  // ImGui::SameLine(); // Removed
+  if (ImGui::RadioButton("Move Vertex", m_BrushSettings.mode == SculptMode::MoveVertex)) {
+    m_BrushSettings.mode = SculptMode::MoveVertex;
     settingsChanged = true;
   }
 
   ImGui::Separator();
   ImGui::Text("Brush Settings");
-  if (ImGui::DragFloat("Radius##Sculpt", &m_BrushSettings.radius, 0.01f, 0.01f,
-                       5.0f))
-    settingsChanged = true;
-  if (ImGui::DragFloat("Strength##Sculpt", &m_BrushSettings.strength, 0.01f,
-                       0.01f, 1.0f))
-    settingsChanged = true;
 
-  ImGui::Separator();
-  ImGui::Text("Brush Falloff");
-
-  if (ImPlot::BeginPlot("##FalloffCurve", ImVec2(-1, 150),
-                        ImPlotFlags_NoMenus | ImPlotFlags_NoBoxSelect |
-                            ImPlotFlags_NoTitle)) {
-    ImPlot::SetupAxes(nullptr, nullptr, ImPlotAxisFlags_NoTickLabels,
-                      ImPlotAxisFlags_NoTickLabels);
-    ImPlot::SetupAxesLimits(0, 1, 0, 1, ImPlotCond_Always);
-
-    auto& points = m_BrushSettings.falloff.GetPoints();
-    std::vector<double> xs, ys;
-    for (const auto& p : points) {
-      xs.push_back(p.pos.x);
-      ys.push_back(p.pos.y);
-    }
-
-    ImPlot::PlotLine("Falloff", xs.data(), ys.data(), xs.size());
-
-    for (size_t i = 0; i < points.size(); ++i) {
-      double x = points[i].pos.x;
-      double y = points[i].pos.y;
-      if (ImPlot::DragPoint((int)i, &x, &y, ImVec4(0, 0.9f, 0, 1), 4)) {
-        points[i].pos.x = glm::clamp((float)x, 0.0f, 1.0f);
-        points[i].pos.y = glm::clamp((float)y, 0.0f, 1.0f);
-        m_BrushSettings.falloff.SortPoints();
+  // Only show Radius, Strength, and Falloff if it's a brush-based tool.
+  if (m_BrushSettings.mode != SculptMode::MoveVertex) {
+      if (ImGui::DragFloat("Radius##Sculpt", &m_BrushSettings.radius, 0.01f, 0.01f,
+                           5.0f))
         settingsChanged = true;
-      }
-    }
+      if (ImGui::DragFloat("Strength##Sculpt", &m_BrushSettings.strength, 0.01f,
+                           0.01f, 1.0f))
+        settingsChanged = true;
 
-    ImPlot::EndPlot();
+      ImGui::Separator();
+      ImGui::Text("Brush Falloff");
+
+      if (ImPlot::BeginPlot("##FalloffCurve", ImVec2(-1, 150),
+                            ImPlotFlags_NoMenus | ImPlotFlags_NoBoxSelect |
+                                ImPlotFlags_NoTitle)) {
+        ImPlot::SetupAxes(nullptr, nullptr, ImPlotAxisFlags_NoTickLabels,
+                          ImPlotAxisFlags_NoTickLabels);
+        ImPlot::SetupAxesLimits(0, 1, 0, 1, ImPlotCond_Always);
+
+        auto& points = m_BrushSettings.falloff.GetPoints();
+        std::vector<double> xs, ys;
+        for (const auto& p : points) {
+          xs.push_back(p.pos.x);
+          ys.push_back(p.pos.y);
+        }
+
+        ImPlot::PlotLine("Falloff", xs.data(), ys.data(), xs.size());
+
+        for (size_t i = 0; i < points.size(); ++i) {
+          double x = points[i].pos.x;
+          double y = points[i].pos.y;
+          if (ImPlot::DragPoint((int)i, &x, &y, ImVec4(0, 0.9f, 0, 1), 4)) {
+            points[i].pos.x = glm::clamp((float)x, 0.0f, 1.0f);
+            points[i].pos.y = glm::clamp((float)y, 0.0f, 1.0f);
+            m_BrushSettings.falloff.SortPoints();
+            settingsChanged = true;
+          }
+        }
+        ImPlot::EndPlot();
+      }
+  } else {
+      ImGui::TextDisabled("Move Vertex tool selected. Radius, Strength, and Falloff are not applicable.");
   }
+
 
   // One single check at the end to request a render if any brush setting was
   // changed.

@@ -20,6 +20,7 @@ class AppUI;
 class PushPullTool;
 class SmoothTool;
 class GrabTool;
+class MoveVertexTool;
 
 enum class EditorMode { TRANSFORM, SCULPT };
 
@@ -102,7 +103,7 @@ class Application {
   std::unique_ptr<PushPullTool> m_PushPullTool;
   std::unique_ptr<SmoothTool> m_SmoothTool;
   std::unique_ptr<GrabTool> m_GrabTool;
-
+  std::unique_ptr<MoveVertexTool> m_MoveVertexTool;
   // --- State ---
   EditorMode m_EditorMode = EditorMode::TRANSFORM;
   SculptMode::Mode m_SculptMode = SculptMode::Pull;

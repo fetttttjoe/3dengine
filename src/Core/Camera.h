@@ -2,7 +2,7 @@
 #include <functional>
 #include <glm/glm.hpp>
 
-#include "Core/Log.h"  // Add Log include
+#include "Core/Log.h"
 
 struct GLFWwindow;
 
@@ -15,6 +15,21 @@ class Camera {
 
   void ProcessMouseScroll(float yoffset);
   void SetAspectRatio(float aspectRatio);
+  
+  void SetPosition(const glm::vec3& position) {
+      m_Position = position;
+      updateMatrices();
+  }
+  // NEW: Add public setters for Yaw and Pitch for test control
+  void SetYaw(float yaw) {
+      m_Yaw = yaw;
+      updateMatrices(); // Recalculate matrices after yaw/pitch change
+  }
+  void SetPitch(float pitch) {
+      m_Pitch = pitch;
+      updateMatrices(); // Recalculate matrices after yaw/pitch change
+  }
+
 
   const glm::mat4& GetViewMatrix() const {
     Log::Debug("Camera::GetViewMatrix() called.");
@@ -26,8 +41,9 @@ class Camera {
   }
 
   glm::vec3 GetPosition() const { return m_Position; }
+  glm::vec3 GetFront() const { return m_Front; } // Getter for m_Front is already there
 
-  // Helpers to convert between world and screen coordinates
+
   static glm::vec2 WorldToScreen(const glm::vec3& worldPos,
                                  const glm::mat4& viewProj, int windowWidth,
                                  int windowHeight);
