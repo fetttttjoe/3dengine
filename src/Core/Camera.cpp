@@ -1,12 +1,14 @@
 #include "Core/Camera.h"
 
-#define GLFW_INCLUDE_NONE
-
 #include <GLFW/glfw3.h>
+#include <imgui.h>
 
-#include <glm/gtc/matrix_inverse.hpp>
 #include <glm/gtc/matrix_transform.hpp>
-#include <iostream>
+
+#include "Core/Application.h"
+#include "Core/Log.h"
+#include "Core/MathHelpers.h"
+#include "Core/SettingsManager.h"
 
 Camera::Camera(GLFWwindow* window, glm::vec3 position)
     : m_Window(window),
@@ -32,89 +34,43 @@ Camera::Camera(GLFWwindow* window, glm::vec3 position)
 void Camera::HandleInput(float deltaTime,
                          std::function<void()> onUpdateCallback) {
   bool keyboardMoved = processKeyboard(deltaTime);
-  bool mouseMoved = false;
+  bool mouseMoved = processMouseMovement();
 
-  if (glfwGetMouseButton(m_Window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS) {
-    if (!m_IsOrbiting) {
-      m_IsOrbiting = true;
-      m_FirstMouse = true;
+  if (keyboardMoved || mouseMoved) {
+    updateMatrices();
+    if (onUpdateCallback) {
+      onUpdateCallback();
     }
-    double xpos, ypos;
-    glfwGetCursorPos(m_Window, &xpos, &ypos);
-    if (m_FirstMouse) {
-      m_LastX = (float)xpos;
-      m_LastY = (float)ypos;
-      m_FirstMouse = false;
-    }
-    float xoffset = (float)xpos - m_LastX;
-    float yoffset = m_LastY - (float)ypos;
-    m_LastX = (float)xpos;
-    m_LastY = (float)ypos;
-
-    if (xoffset != 0.0f || yoffset != 0.0f) {
-      mouseMoved = processMouseMovement(xoffset, yoffset);
-    }
-  } else {
-    m_IsOrbiting = false;
-  }
-
-  if ((keyboardMoved || mouseMoved) && onUpdateCallback) {
-    onUpdateCallback();
   }
 }
 
 void Camera::ResetToDefault() {
-  // same values as the ctor defaults
   m_Position = glm::vec3(0.0f, 2.0f, 8.0f);
   m_Yaw = -90.0f;
   m_Pitch = -10.0f;
   m_Zoom = 45.0f;
   updateMatrices();
+  Application::Get().RequestSceneRender();
 }
 
 void Camera::ProcessMouseScroll(float yoffset) {
   m_Position += m_Front * yoffset * 0.5f;
   updateMatrices();
+  Application::Get().RequestSceneRender();
 }
 
 void Camera::SetAspectRatio(float aspectRatio) {
   if (m_AspectRatio != aspectRatio) {
     m_AspectRatio = aspectRatio;
     updateMatrices();
+    Application::Get().RequestSceneRender();
   }
 }
 
-glm::vec2 Camera::WorldToScreen(const glm::vec3& worldPos, int windowWidth,
-                                int windowHeight) const {
-  glm::mat4 vp = m_ProjectionMatrix * m_ViewMatrix;
-  glm::vec4 clipPos = vp * glm::vec4(worldPos, 1.0f);
-
-  // Perspective divide to get Normalized Device Coordinates (NDC)
-  glm::vec3 ndcPos = glm::vec3(clipPos) / clipPos.w;
-
-  // Convert NDC [-1, 1] to screen coordinates [0, width/height]
-  float screenX = (ndcPos.x + 1.0f) / 2.0f * windowWidth;
-  // Invert Y because screen coordinates usually have (0,0) at the top-left
-  float screenY = (1.0f - ndcPos.y) / 2.0f * windowHeight;
-
-  return glm::vec2(screenX, screenY);
-}
-
-// IMPROVEMENT: Renamed 'depth' parameter to 'ndcZ' for clarity.
-glm::vec3 Camera::ScreenToWorldPoint(const glm::vec2& screenPos, float ndcZ,
-                                     int windowWidth, int windowHeight) const {
-  // Convert screen coordinates [0, width/height] to NDC [-1, 1]
-  float ndcX = (screenPos.x / windowWidth) * 2.0f - 1.0f;
-  float ndcY = 1.0f - (screenPos.y / windowHeight) * 2.0f;  // Invert Y
-
-  // Unproject the NDC point back to world space
-  glm::mat4 invVP = glm::inverse(m_ProjectionMatrix * m_ViewMatrix);
-  glm::vec4 worldPos = invVP * glm::vec4(ndcX, ndcY, ndcZ, 1.0f);
-
-  // The result of the multiplication is in homogeneous coordinates,
-  // so we must perform the perspective divide to get the final 3D point.
-  if (worldPos.w == 0.0f) return glm::vec3(0.0f);  // Avoid division by zero
-  return glm::vec3(worldPos) / worldPos.w;
+glm::vec3 Camera::ScreenToWorldRay(const glm::vec2& screenPos, int windowWidth,
+                                   int windowHeight) const {
+  return MathHelpers::ScreenToWorldRay(screenPos, m_ProjectionMatrix,
+                                       m_ViewMatrix, windowWidth, windowHeight);
 }
 
 void Camera::updateMatrices() {
@@ -123,15 +79,18 @@ void Camera::updateMatrices() {
   front.y = sin(glm::radians(m_Pitch));
   front.z = sin(glm::radians(m_Yaw)) * cos(glm::radians(m_Pitch));
   m_Front = glm::normalize(front);
+
   m_Right = glm::normalize(glm::cross(m_Front, m_WorldUp));
   m_Up = glm::normalize(glm::cross(m_Right, m_Front));
+
   m_ViewMatrix = glm::lookAt(m_Position, m_Position + m_Front, m_Up);
+
   m_ProjectionMatrix =
       glm::perspective(glm::radians(m_Zoom), m_AspectRatio, 0.1f, 100.0f);
 }
 
 bool Camera::processKeyboard(float deltaTime) {
-  float velocity = m_MovementSpeed * deltaTime;
+  float velocity = SettingsManager::Get().cameraSpeed * deltaTime;
   bool moved = false;
 
   if (glfwGetKey(m_Window, GLFW_KEY_W) == GLFW_PRESS) {
@@ -151,23 +110,39 @@ bool Camera::processKeyboard(float deltaTime) {
     moved = true;
   }
 
-  if (moved) {
-    updateMatrices();
-  }
   return moved;
 }
 
-bool Camera::processMouseMovement(float xoffset, float yoffset) {
-  float sensitivity = 0.1f;
-  xoffset *= sensitivity;
-  yoffset *= sensitivity;
+bool Camera::processMouseMovement() {
+  if (glfwGetMouseButton(m_Window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS) {
+    if (!m_IsOrbiting) {
+      m_IsOrbiting = true;
+      m_FirstMouse = true;
+    }
+    double xpos, ypos;
+    glfwGetCursorPos(m_Window, &xpos, &ypos);
+    if (m_FirstMouse) {
+      m_LastX = (float)xpos;
+      m_LastY = (float)ypos;
+      m_FirstMouse = false;
+    }
+    float xoffset = (float)xpos - m_LastX;
+    float yoffset = m_LastY - (float)ypos;
+    m_LastX = (float)xpos;
+    m_LastY = (float)ypos;
 
-  m_Yaw += xoffset;
-  m_Pitch += yoffset;
+    if (xoffset != 0.0f || yoffset != 0.0f) {
+      float sensitivity = 0.1f;
+      m_Yaw += xoffset * sensitivity;
+      m_Pitch += yoffset * sensitivity;
 
-  if (m_Pitch > 89.0f) m_Pitch = 89.0f;
-  if (m_Pitch < -89.0f) m_Pitch = -89.0f;
+      if (m_Pitch > 89.0f) m_Pitch = 89.0f;
+      if (m_Pitch < -89.0f) m_Pitch = -89.0f;
 
-  updateMatrices();
-  return true;
+      return true;
+    }
+  } else {
+    m_IsOrbiting = false;
+  }
+  return false;
 }

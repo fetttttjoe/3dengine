@@ -2,14 +2,25 @@
 #include "gtest/gtest.h"
 #include <fstream>
 #include <cstdio>
+#include <glm/glm.hpp> // Needed for glm::vec3 comparisons
 
 class SettingsManagerTest : public ::testing::Test {
 protected:
     void SetUp() override {
+        // Reset settings to a known state for each test
         AppSettings& settings = SettingsManager::Get();
         settings.leftPaneWidth = 200.0f;
         settings.rightPaneWidth = 300.0f;
         settings.cloneOffset = {0.5f, 0.5f, 0.0f};
+        settings.objImportScale = 1.0f;
+        settings.gridSize = 80;
+        settings.gridDivisions = 80;
+        settings.cameraSpeed = 5.0f;
+        // Also reset the highlight colors to default for consistent test runs.
+        settings.vertexHighlightColor = {1.0f, 0.5f, 0.0f, 1.0f};
+        settings.edgeHighlightColor = {1.0f, 0.5f, 0.0f, 1.0f};
+        settings.pathHighlightColor = {0.0f, 0.8f, 0.8f, 1.0f};
+        settings.selectedFacesColor = {0.0f, 0.5f, 1.0f, 0.5f};
     }
     void TearDown() override {
         std::remove("test_settings.json");
@@ -23,16 +34,34 @@ TEST_F(SettingsManagerTest, DefaultsAreCorrect) {
     EXPECT_EQ(settings.leftPaneWidth, 200.0f);
     EXPECT_EQ(settings.rightPaneWidth, 300.0f);
     EXPECT_EQ(settings.cloneOffset, glm::vec3(0.5f, 0.5f, 0.0f));
+    EXPECT_EQ(settings.objImportScale, 1.0f);
+    EXPECT_EQ(settings.gridSize, 80);
+    EXPECT_EQ(settings.gridDivisions, 80);
+    EXPECT_EQ(settings.cameraSpeed, 5.0f);
+    // Add assertions for new colors
+    EXPECT_EQ(settings.vertexHighlightColor, glm::vec4(1.0f, 0.5f, 0.0f, 1.0f));
+    EXPECT_EQ(settings.edgeHighlightColor, glm::vec4(1.0f, 0.5f, 0.0f, 1.0f));
+    EXPECT_EQ(settings.pathHighlightColor, glm::vec4(0.0f, 0.8f, 0.8f, 1.0f));
+    EXPECT_EQ(settings.selectedFacesColor, glm::vec4(0.0f, 0.5f, 1.0f, 0.5f));
 }
 
 TEST_F(SettingsManagerTest, SaveAndLoad) {
     SettingsManager::Get().leftPaneWidth = 250.5f;
     SettingsManager::Get().cloneOffset = glm::vec3(1.0f, 0.0f, -1.0f);
+    SettingsManager::Get().gridSize = 100;
+    SettingsManager::Get().cameraSpeed = 10.0f;
+    SettingsManager::Get().vertexHighlightColor = glm::vec4(0.1f, 0.2f, 0.3f, 1.0f); // Set a new color
+
     ASSERT_TRUE(SettingsManager::Save("test_settings.json"));
+
     SetUp(); // Reset to defaults
+
     ASSERT_TRUE(SettingsManager::Load("test_settings.json"));
     EXPECT_FLOAT_EQ(SettingsManager::Get().leftPaneWidth, 250.5f);
     EXPECT_EQ(SettingsManager::Get().cloneOffset, glm::vec3(1.0f, 0.0f, -1.0f));
+    EXPECT_EQ(SettingsManager::Get().gridSize, 100);
+    EXPECT_FLOAT_EQ(SettingsManager::Get().cameraSpeed, 10.0f);
+    EXPECT_EQ(SettingsManager::Get().vertexHighlightColor, glm::vec4(0.1f, 0.2f, 0.3f, 1.0f));
 }
 
 // --- Negative and Edge Case Tests ---
@@ -70,4 +99,49 @@ TEST_F(SettingsManagerTest, HandlesWrongDataType) {
     // The JSON library will throw an exception, which our Load function should catch.
     ASSERT_FALSE(SettingsManager::Load("test_settings.json"));
     EXPECT_EQ(SettingsManager::Get().leftPaneWidth, 200.0f); // Should remain default
+}
+
+TEST_F(SettingsManagerTest, GetDescriptors_AreCorrect) {
+    const auto& descriptors = SettingsManager::GetDescriptors();
+    AppSettings& settings = SettingsManager::Get();
+
+    // Verify count (adjust if more settings are added/removed)
+    // There are 11 settings now, not 7.
+    EXPECT_EQ(descriptors.size(), 11);
+
+    // Test specific descriptors
+    bool foundCloneOffset = false;
+    bool foundLeftPaneWidth = false;
+    bool foundGridSize = false;
+    bool foundVertexHighlightColor = false; // Add for new color settings
+
+    for (const auto& desc : descriptors) {
+        if (desc.key == "cloneOffset") {
+            foundCloneOffset = true;
+            EXPECT_EQ(desc.label, "Clone Offset");
+            EXPECT_EQ(desc.type, SettingType::Float3);
+            EXPECT_EQ(static_cast<glm::vec3*>(desc.ptr), &settings.cloneOffset);
+        } else if (desc.key == "leftPaneWidth") {
+            foundLeftPaneWidth = true;
+            EXPECT_EQ(desc.label, "Left Pane Width");
+            EXPECT_EQ(desc.type, SettingType::Float);
+            EXPECT_EQ(static_cast<float*>(desc.ptr), &settings.leftPaneWidth);
+        } else if (desc.key == "gridSize") {
+            foundGridSize = true;
+            EXPECT_EQ(desc.label, "Grid Size");
+            EXPECT_EQ(desc.type, SettingType::Int);
+            EXPECT_EQ(static_cast<int*>(desc.ptr), &settings.gridSize);
+        } else if (desc.key == "vertexHighlightColor") {
+            foundVertexHighlightColor = true;
+            EXPECT_EQ(desc.label, "Vertex Highlight");
+            EXPECT_EQ(desc.type, SettingType::Color4);
+            EXPECT_EQ(static_cast<glm::vec4*>(desc.ptr), &settings.vertexHighlightColor);
+        }
+        // Add checks for other settings as needed
+    }
+
+    EXPECT_TRUE(foundCloneOffset) << "Descriptor for 'cloneOffset' not found or incorrect.";
+    EXPECT_TRUE(foundLeftPaneWidth) << "Descriptor for 'leftPaneWidth' not found or incorrect.";
+    EXPECT_TRUE(foundGridSize) << "Descriptor for 'gridSize' not found or incorrect.";
+    EXPECT_TRUE(foundVertexHighlightColor) << "Descriptor for 'vertexHighlightColor' not found or incorrect.";
 }

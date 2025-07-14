@@ -16,12 +16,16 @@
 
 #include "Core/Log.h"
 #include "Core/PropertyNames.h"
+#include "Sculpting/SculptableMesh.h"  
 #include "imgui.h"
 #include "imgui_stdlib.h"
 
+// Forward-declarations
+class IEditableMesh;
 class Scene;
 class Shader;
 class IProperty;
+class OpenGLRenderer;
 
 class PropertySet {
  public:
@@ -81,7 +85,6 @@ class IGizmoClient {
  public:
   virtual ~IGizmoClient() = default;
   virtual std::vector<GizmoHandleDef> GetGizmoHandleDefs() = 0;
-  // FIX: Signature now includes the axis of interaction for non-uniform scaling
   virtual void OnGizmoUpdate(const std::string& propertyName, float delta,
                              const glm::vec3& axis) = 0;
 };
@@ -91,7 +94,8 @@ class ISceneObject : public IGizmoClient {
   ISceneObject() : id(0), name("Unnamed Object"), isSelected(false) {}
   virtual ~ISceneObject() = default;
 
-  virtual void Draw(const glm::mat4& view, const glm::mat4& projection) = 0;
+  virtual void Draw(OpenGLRenderer& renderer, const glm::mat4& view,
+                    const glm::mat4& projection) = 0;
   virtual void DrawForPicking(Shader& pickingShader, const glm::mat4& view,
                               const glm::mat4& projection) = 0;
   virtual void DrawHighlight(const glm::mat4& view,
@@ -108,14 +112,57 @@ class ISceneObject : public IGizmoClient {
   virtual void SetRotation(const glm::quat& rotation) = 0;
   virtual void SetScale(const glm::vec3& scale) = 0;
   virtual void SetEulerAngles(const glm::vec3& eulerAngles) = 0;
-  virtual void Serialize(nlohmann::json& outJson) const;
-  virtual void Deserialize(const nlohmann::json& inJson);
+
+  // CORRECT: Implementation moved here to resolve linker errors.
+  virtual void Serialize(nlohmann::json& outJson) const {
+    outJson["type"] = GetTypeString();
+    outJson["id"] = id;
+    outJson["name"] = name;
+    outJson["isPristine"] = isPristine;
+    nlohmann::json propsJson;
+    GetPropertySet().Serialize(propsJson);
+    outJson["properties"] = propsJson;
+
+    IEditableMesh* editableMesh =
+        const_cast<ISceneObject*>(this)->GetEditableMesh();
+    if (editableMesh) {
+      if (auto* sculptableMesh = dynamic_cast<SculptableMesh*>(editableMesh)) {
+        sculptableMesh->Serialize(outJson);
+      }
+    }
+  }
+
+  // CORRECT: Implementation moved here to resolve linker errors.
+  virtual void Deserialize(const nlohmann::json& inJson) {
+    id = inJson.value("id", 1);
+    name = inJson.value("name", "Object");
+    isPristine = inJson.value("isPristine", true);
+    if (inJson.contains("properties")) {
+      GetPropertySet().Deserialize(inJson["properties"]);
+    }
+
+    RebuildMesh();
+
+    if (IEditableMesh* editableMesh = GetEditableMesh()) {
+      if (auto* sculptableMesh = dynamic_cast<SculptableMesh*>(editableMesh)) {
+        sculptableMesh->Deserialize(inJson);
+        SetMeshDirty(true);
+      }
+    }
+  }
+
+  virtual std::shared_ptr<Shader> GetShader() const = 0;
+  virtual IEditableMesh* GetEditableMesh() = 0;
+  virtual bool IsMeshDirty() const = 0;
+  virtual void SetMeshDirty(bool dirty) = 0;
+  virtual bool IsUserCreatable() const { return true; }
 
   uint32_t id;
   std::string name;
   bool isSelected;
   bool isSelectable = true;
   bool isStatic = false;
+  bool isPristine = true;
 };
 
 // =======================================================================
@@ -230,7 +277,6 @@ void TProperty<T>::DrawEditor() {
     changed =
         ImGui::DragFloat3(m_Name.c_str(), glm::value_ptr(tempValue), 0.1f);
   } else if constexpr (std::is_same_v<T, glm::vec4>) {
-    // CORRECTED: Use the constant for a safe comparison
     if (m_Name == PropertyNames::Color) {
       changed = ImGui::ColorEdit4(m_Name.c_str(), glm::value_ptr(tempValue));
     } else {

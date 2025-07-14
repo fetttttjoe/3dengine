@@ -2,7 +2,13 @@
 #include <glad/glad.h>
 
 #include <cstdint>
+#include <glm/glm.hpp>
 #include <memory>
+#include <unordered_map>
+#include <unordered_set>
+#include <vector>
+
+#include "Sculpting/SubObjectSelection.h"
 
 class Scene;
 class Camera;
@@ -10,6 +16,26 @@ class ISceneObject;
 class Shader;
 class TransformGizmo;
 struct GLFWwindow;
+class IEditableMesh;
+class Grid;
+
+struct GpuMeshResources {
+  GLuint vao = 0;
+  GLuint vboPositions = 0;
+  GLuint vboNormals = 0;
+  GLuint ebo = 0;
+  GLsizei indexCount = 0;
+
+  void Release() {
+    if (vao != 0) {
+      if (ebo != 0) glDeleteBuffers(1, &ebo);
+      if (vboPositions != 0) glDeleteBuffers(1, &vboPositions);
+      if (vboNormals != 0) glDeleteBuffers(1, &vboNormals);
+      glDeleteVertexArrays(1, &vao);
+    }
+    vao = vboPositions = vboNormals = ebo = indexCount = 0;
+  }
+};
 
 class OpenGLRenderer {
  public:
@@ -18,61 +44,106 @@ class OpenGLRenderer {
 
   bool Initialize(void* windowHandle);
   void Shutdown();
-
-  // Called when the viewport panel is resized
   void OnWindowResize(int width, int height);
 
-  // --- New Rendering Workflow ---
-  // 1. Begin drawing the 3D scene to an offscreen texture
-  void BeginSceneFrame();
-  // 2. Draw all scene contents
-  void RenderScene(const Scene& scene, const Camera& camera);
-  void RenderHighlight(const ISceneObject& object, const Camera& camera);
-  void RenderAnchors(const Scene& scene, const Camera& camera);
-  // 3. Finish drawing the 3D scene
-  void EndSceneFrame();
-
-  // --- Final Composition ---
-  // 4. Begin drawing to the main window
+  // --- Frame Lifecycle ---
   void BeginFrame();
-  // 5. Draw the ImGui interface
-  void RenderUI();
-  // 6. Swap buffers to display the final image
   void EndFrame();
 
-  // --- Helpers ---
-  // Processes a mouse click to see which object was selected
+  // --- Scene Rendering ---
+  void BeginSceneFrame();
+  void EndSceneFrame();
+
+  void RenderObject(const ISceneObject& object, const Camera& camera);
+  void RenderObjectForPicking(const ISceneObject& object, Shader& pickingShader,
+                              const Camera& camera);
+  void RenderObjectHighlight(const ISceneObject& object, const Camera& camera);
+
+  // --- Specialized Rendering Methods ---
+  void RenderGizmo(const TransformGizmo& gizmo, const Camera& camera);
+  void RenderGrid(const Grid& grid, const Camera& camera);
+  void RenderHighlightedPath(const IEditableMesh& mesh,
+                           const std::vector<std::pair<uint32_t, uint32_t>>& path,
+                           const glm::mat4& modelMatrix, const Camera& camera);
+
+  // --- Sub-Object Rendering ---
+  void RenderVertexHighlights(
+      const IEditableMesh& mesh,
+      const std::unordered_set<uint32_t>& selectedVertexIndices,
+      const glm::mat4& modelMatrix, const Camera& camera);
+  void RenderObjectAsGhost(const ISceneObject& object, const Camera& camera,
+                           const glm::vec4& color);
+  void RenderSelectedEdges(
+      const IEditableMesh& mesh,
+      const std::unordered_set<std::pair<uint32_t, uint32_t>, PairHash>&
+          selectedEdges,
+      const glm::mat4& modelMatrix, const Camera& camera);
+
+  void RenderSelectedFaces(const IEditableMesh& mesh,
+                           const std::unordered_set<uint32_t>& selectedFaces,
+                           const glm::mat4& modelMatrix, const Camera& camera);
+
+  // --- Picking ---
   uint32_t ProcessPicking(int x, int y, const Scene& scene,
                           const Camera& camera);
-  uint32_t ProcessGizmoPicking(int x, int y, TransformGizmo& gizmo,
+  uint32_t ProcessGizmoPicking(int x, int y, const TransformGizmo& gizmo,
                                const Camera& camera);
 
-  // Gives the UI the ID of the final rendered scene texture
+  // --- UI Rendering ---
+  void RenderUI();
+
+  // --- Resource Management ---
   uint32_t GetSceneTextureId() const { return m_SceneColorTexture; }
+  void SyncSceneObjects(const Scene& scene);
+
+  void ClearAllGpuResources();
+
+  std::unordered_map<uint32_t, GpuMeshResources>& GetGpuResources() {
+    return m_GpuResources;
+  }
 
  private:
   void createFramebuffers();
   void cleanupFramebuffers();
+  void createGizmoResources();
   void createAnchorMesh();
+  void createGridResources(const Grid& grid);
+  void updateGpuMesh(ISceneObject* object);
 
   GLFWwindow* m_Window;
   int m_Width, m_Height;
 
   // Framebuffers
-  unsigned int m_PickingFBO;
-  unsigned int m_PickingTexture;
-  unsigned int m_SceneFBO;
-  unsigned int m_SceneColorTexture;
-  unsigned int m_DepthTexture;
+  GLuint m_PickingFBO = 0, m_PickingTexture = 0;
+  GLuint m_SceneFBO = 0, m_SceneColorTexture = 0, m_DepthTexture = 0,
+         m_SceneDepthRBO = 0;
 
   // Shaders
   std::shared_ptr<Shader> m_PickingShader;
   std::shared_ptr<Shader> m_HighlightShader;
+  std::shared_ptr<Shader> m_UnlitShader;
+  std::shared_ptr<Shader> m_GizmoShader;
   std::shared_ptr<Shader> m_AnchorShader;
+  std::shared_ptr<Shader> m_GridShader;
+  std::shared_ptr<Shader> m_LitShader;
 
-  // Primitives
-  unsigned int m_AnchorVAO;
-  unsigned int m_AnchorVBO;
-  unsigned int m_AnchorEBO;
-  GLsizei m_AnchorIndexCount;
+  // Mesh Data & GPU Buffers
+  std::unordered_map<uint32_t, GpuMeshResources> m_GpuResources;
+  GLuint m_SelectedEdgesVAO = 0, m_SelectedEdgesVBO = 0;
+
+  // Gizmo Resources
+  GLuint m_GizmoVAO = 0, m_GizmoVBO = 0, m_GizmoEBO = 0;
+  GLsizei m_GizmoIndexCount = 0;
+
+  // Anchor Resources
+  GLuint m_AnchorVAO = 0, m_AnchorVBO = 0, m_AnchorEBO = 0;
+  GLsizei m_AnchorIndexCount = 0;
+
+  // Grid Resources
+  GLuint m_GridVAO = 0, m_GridVBO = 0;
+
+  // Sub-object selection resources
+  GLuint m_SelectedFacesVAO = 0, m_SelectedFacesVBO = 0;
+  GLuint m_SelectedVerticesVAO = 0, m_SelectedVerticesVBO = 0;
+  GLuint m_HighlightedPathVAO = 0, m_HighlightedPathVBO = 0;
 };

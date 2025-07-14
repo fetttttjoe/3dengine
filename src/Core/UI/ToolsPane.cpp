@@ -2,18 +2,24 @@
 
 #include <imgui.h>
 
-ToolsPane::ToolsPane() {}
+#include "Core/Application.h"
+#include "Core/Camera.h"
 
-void ToolsPane::Draw(bool& showMetricsWindow) {
+ToolsPane::ToolsPane(Application* app) : m_App(app) {}
+
+void ToolsPane::Draw() {
   ImGui::Text("Tools");
-  if (ImGui::Button("Reset Cam") && OnResetCamera) {
-    OnResetCamera();
+  ImGui::Separator();
+
+  if (ImGui::Button("Reset Cam")) {
+    m_App->GetCamera()->ResetToDefault();
   }
+
 #ifndef NDEBUG
   ImGui::Separator();
-  const char* lbl = showMetricsWindow ? "Hide Metrics" : "Show Metrics";
-  if (ImGui::Button(lbl)) {
-    showMetricsWindow = !showMetricsWindow;
+  bool showMetrics = m_App->GetShowMetricsWindow();
+  if (ImGui::Checkbox("Show Metrics", &showMetrics)) {
+    m_App->SetShowMetricsWindow(showMetrics);
   }
 #endif
 }

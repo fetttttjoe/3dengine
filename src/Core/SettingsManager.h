@@ -2,14 +2,11 @@
 
 #include <glm/glm.hpp>
 #include <string>
-#include <vector>
 #include <unordered_map>
+#include <vector>
 
 /** Supported UI widget types for auto-generation. */
-enum class SettingType {
-  Float3,
-  Float,
-};
+enum class SettingType { Float3, Float, Int, Color4 };
 
 /** Descriptor for one setting. */
 struct SettingDescriptor {
@@ -21,9 +18,24 @@ struct SettingDescriptor {
 
 /** All of your configurable settings with defaults. */
 struct AppSettings {
+  // --- Object Settings ---
   glm::vec3 cloneOffset = {0.5f, 0.5f, 0.0f};
+  float objImportScale = 1.0f;
+
+  // --- UI Settings ---
   float leftPaneWidth = 200.0f;
   float rightPaneWidth = 300.0f;
+
+  // --- World Settings ---
+  int gridSize = 80;
+  int gridDivisions = 80;
+  float cameraSpeed = 5.0f;
+
+  // --- Selection Colors ---
+  glm::vec4 vertexHighlightColor = {1.0f, 0.5f, 0.0f, 1.0f};
+  glm::vec4 edgeHighlightColor = {1.0f, 0.5f, 0.0f, 1.0f};
+  glm::vec4 pathHighlightColor = {0.0f, 0.8f, 0.8f, 1.0f};
+  glm::vec4 selectedFacesColor = {0.0f, 0.5f, 1.0f, 0.5f};
 };
 
 class SettingsManager {
@@ -34,18 +46,14 @@ class SettingsManager {
   static const std::vector<SettingDescriptor>& GetDescriptors();
 
  private:
-  // FIX: This struct holds the manager's internal data.
-  // It was missing from the header file.
   struct ManagerData {
-      std::vector<SettingDescriptor> Descriptors;
-      std::unordered_map<std::string, const SettingDescriptor*> DescriptorMap;
+    std::vector<SettingDescriptor> Descriptors;
+    std::unordered_map<std::string, const SettingDescriptor*> DescriptorMap;
   };
-  
+
   static AppSettings s_Settings;
   static ManagerData s_ManagerData;
 
-  // The Registrar uses a static instance to ensure its constructor
-  // runs once at program startup to populate the settings data.
   struct Registrar {
     Registrar();
   };

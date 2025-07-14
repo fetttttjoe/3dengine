@@ -1,13 +1,14 @@
-#include "Scene.h"
-
-#include <Core/SettingsManager.h>
+#include "Scene/Scene.h"
 
 #include <algorithm>
 #include <fstream>
-#include <glm/glm.hpp>  // for glm::vec3
+#include <glm/glm.hpp>
 #include <iomanip>
 #include <iostream>
 
+#include "Core/Application.h"
+#include "Core/Log.h"
+#include "Core/SettingsManager.h"
 #include "Factories/SceneObjectFactory.h"
 #include "Interfaces.h"
 #include "nlohmann/json.hpp"
@@ -17,21 +18,53 @@ Scene::Scene(SceneObjectFactory* factory) : m_ObjectFactory(factory) {}
 Scene::~Scene() = default;
 
 void Scene::Clear() {
-  // Keep only non-selectable (e.g. the grid), then renumber IDs
   m_Objects.erase(
       std::remove_if(m_Objects.begin(), m_Objects.end(),
-                     [](auto const& obj) { return obj->isSelectable; }),
+                     [](const auto& obj) { return obj->isSelectable; }),
       m_Objects.end());
+
+  m_DeferredDeletions.clear();
   m_SelectedIndex = -1;
-  m_NextObjectID = 1;
-  for (auto const& o : m_Objects)
-    m_NextObjectID = std::max(m_NextObjectID, o->id + 1);
+
+  uint32_t maxId = 0;
+  for (const auto& o : m_Objects) {
+    if (o) maxId = std::max(maxId, o->id);
+  }
+  m_NextObjectID = maxId + 1;
+  Application::Get().RequestSceneRender();
+}
+
+void Scene::ProcessDeferredDeletions() {
+  if (m_DeferredDeletions.empty()) {
+    return;
+  }
+
+  ISceneObject* selectedObject = GetSelectedObject();
+  if (selectedObject != nullptr) {
+    bool isSelectedForDeletion =
+        std::find(m_DeferredDeletions.begin(), m_DeferredDeletions.end(),
+                  selectedObject->id) != m_DeferredDeletions.end();
+    if (isSelectedForDeletion) {
+      SetSelectedObjectByID(0);
+    }
+  }
+
+  m_Objects.erase(std::remove_if(m_Objects.begin(), m_Objects.end(),
+                                 [this](const auto& obj) {
+                                   return std::find(m_DeferredDeletions.begin(),
+                                                    m_DeferredDeletions.end(),
+                                                    obj->id) !=
+                                          m_DeferredDeletions.end();
+                                 }),
+                  m_Objects.end());
+
+  m_DeferredDeletions.clear();
+  Application::Get().RequestSceneRender();
 }
 
 void Scene::Save(const std::string& filepath) const {
   nlohmann::json sceneJ;
   sceneJ["objects"] = nlohmann::json::array();
-
   uint32_t maxId = 0;
   for (auto const& o : m_Objects) {
     if (o->isSelectable) {
@@ -42,7 +75,6 @@ void Scene::Save(const std::string& filepath) const {
     maxId = std::max(maxId, o->id);
   }
   sceneJ["next_object_id"] = maxId + 1;
-
   std::ofstream ofs(filepath);
   ofs << std::setw(4) << sceneJ << "\n";
 }
@@ -53,38 +85,29 @@ void Scene::Load(const std::string& filepath) {
     Log::Debug("Could not open scene file for loading: ", filepath);
     return;
   }
-
   nlohmann::json sceneJson;
   in >> sceneJson;
-
-  // 1) remove all selectable objects, keep things like Grid
   Clear();
-
-  // 2) restore next‐ID
   m_NextObjectID = sceneJson.value("next_object_id", 1);
-
-  // 3) recreate each saved object
   const auto& arr = sceneJson["objects"];
   for (const auto& objJson : arr) {
     std::string type = objJson.value("type", "");
     auto clone = m_ObjectFactory->Create(type);
     if (!clone) continue;
-
-    // give it back its exact old state (including id & name)
     clone->Deserialize(objJson);
-
-    // ensure our allocator won't reuse this ID
     if (clone->id >= m_NextObjectID) m_NextObjectID = clone->id + 1;
-
-    // push _without_ reassigning id
     m_Objects.push_back(std::move(clone));
   }
+  Application::Get().RequestSceneRender();
 }
+
+// The old LoadMeshFromFile function has been completely removed from this file.
 
 void Scene::AddObject(std::unique_ptr<ISceneObject> object) {
   if (!object) return;
   object->id = m_NextObjectID++;
   m_Objects.push_back(std::move(object));
+  Application::Get().RequestSceneRender();
 }
 
 const std::vector<std::unique_ptr<ISceneObject>>& Scene::GetSceneObjects()
@@ -93,6 +116,12 @@ const std::vector<std::unique_ptr<ISceneObject>>& Scene::GetSceneObjects()
 }
 
 ISceneObject* Scene::GetObjectByID(uint32_t id) {
+  auto it = std::find_if(m_Objects.begin(), m_Objects.end(),
+                         [id](auto const& o) { return o->id == id; });
+  return (it != m_Objects.end() ? it->get() : nullptr);
+}
+
+const ISceneObject* Scene::GetObjectByID(uint32_t id) const {
   auto it = std::find_if(m_Objects.begin(), m_Objects.end(),
                          [id](auto const& o) { return o->id == id; });
   return (it != m_Objects.end() ? it->get() : nullptr);
@@ -110,6 +139,7 @@ void Scene::SetSelectedObjectByID(uint32_t id) {
       break;
     }
   }
+  Application::Get().RequestSceneRender();
 }
 
 void Scene::SelectNextObject() {
@@ -128,24 +158,24 @@ void Scene::SelectNextObject() {
   SetSelectedObjectByID(0);
 }
 
-void Scene::DeleteObjectByID(uint32_t id) {
-  auto it = std::find_if(m_Objects.begin(), m_Objects.end(),
-                         [id](auto const& o) { return o->id == id; });
-  if (it == m_Objects.end() || !(*it)->isSelectable) return;
-
-  bool wasSelected = ((*it)->isSelected);
-  m_Objects.erase(it);
-  if (wasSelected) m_SelectedIndex = -1;
+void Scene::QueueForDeletion(uint32_t id) {
+  if (std::find(m_DeferredDeletions.begin(), m_DeferredDeletions.end(), id) ==
+      m_DeferredDeletions.end()) {
+    m_DeferredDeletions.push_back(id);
+  }
 }
 
 void Scene::DeleteSelectedObject() {
-  if (auto* s = GetSelectedObject()) DeleteObjectByID(s->id);
+  if (auto* s = GetSelectedObject()) {
+    QueueForDeletion(s->id);
+  }
 }
 
 ISceneObject* Scene::GetSelectedObject() {
-  return (m_SelectedIndex >= 0 && m_SelectedIndex < (int)m_Objects.size())
-             ? m_Objects[m_SelectedIndex].get()
-             : nullptr;
+  if (m_SelectedIndex >= 0 && m_SelectedIndex < (int)m_Objects.size()) {
+    return m_Objects[m_SelectedIndex].get();
+  }
+  return nullptr;
 }
 
 int Scene::GetNextAvailableIndexForName(const std::string& baseName) const {
@@ -167,32 +197,26 @@ int Scene::GetNextAvailableIndexForName(const std::string& baseName) const {
 }
 
 void Scene::DuplicateObject(uint32_t sourceID) {
-  // 1) locate the original
   ISceneObject* orig = GetObjectByID(sourceID);
   if (!orig || !orig->isSelectable || !m_ObjectFactory) return;
 
-  // 2) deep-clone via factory
   auto clone = m_ObjectFactory->Copy(*orig);
   if (!clone) return;
 
-  // 3) assign new ID
   clone->id = m_NextObjectID++;
 
-  // 4) fresh name: “Type” or “Type (n)”
   {
-    std::string base = orig->GetTypeString();
+    std::string base = orig->name;
     int idx = GetNextAvailableIndexForName(base);
     clone->name = (idx == 0) ? base : base + " (" + std::to_string(idx) + ")";
   }
 
-  // 5) offset position so it isn’t exactly on top
   {
     auto p = orig->GetPosition();
     glm::vec3 origPos = orig->GetPosition();
-    glm::vec3 offset = SettingsManager::Get().cloneOffset;
-    clone->SetPosition(origPos + offset);
+    clone->SetPosition(origPos + SettingsManager::Get().cloneOffset);
   }
 
-  // 6) insert into scene
   m_Objects.push_back(std::move(clone));
+  Application::Get().RequestSceneRender();
 }

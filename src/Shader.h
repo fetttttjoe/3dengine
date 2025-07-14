@@ -24,12 +24,14 @@ class Shader {
   void SetUniform3f(const std::string& name, float v0, float v1, float v2);
   void SetUniform4f(const std::string& name, float v0, float v1, float v2,
                     float v3);
-
+  void SetUniform4f(const std::string &name, const glm::vec4& value);
   void SetUniformMat4f(const std::string& name, const glm::mat4& matrix);
 
   // convenience overloads
   void SetUniformVec3(const std::string& name, const glm::vec3& v);
   void SetUniformVec4(const std::string& name, const glm::vec4& v);
+
+  unsigned int GetRendererID() const { return m_RendererID; }
 
  private:
   std::string loadShaderSource(const std::string& filepath);

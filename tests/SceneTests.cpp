@@ -4,6 +4,10 @@
 #include "Scene/Scene.h"
 #include "gtest/gtest.h"
 #include "Core/PropertyNames.h"
+#include <cstdio>
+#include "Scene/Objects/Pyramid.h" 
+#include "Sculpting/SculptableMesh.h" // Include SculptableMesh for IEditableMesh
+#include "Core/SettingsManager.h" // Needed for default cloneOffset
 
 class MockSceneObject : public ISceneObject {
 public:
@@ -11,7 +15,7 @@ public:
         m_Properties.Add<glm::vec3>(PropertyNames::Position, {0.0f, 0.0f, 0.0f});
     }
     std::string GetTypeString() const override { return m_Type; }
-    void Draw(const glm::mat4&, const glm::mat4&) override {}
+    void Draw(class OpenGLRenderer& renderer, const glm::mat4& view, const glm::mat4& projection) override {}
     void DrawForPicking(Shader&, const glm::mat4&, const glm::mat4&) override {}
     void DrawHighlight(const glm::mat4&, const glm::mat4&) const override {}
     void RebuildMesh() override {}
@@ -27,6 +31,14 @@ public:
     void SetEulerAngles(const glm::vec3&) override {}
     std::vector<GizmoHandleDef> GetGizmoHandleDefs() override { return {}; }
     void OnGizmoUpdate(const std::string&, float, const glm::vec3&) override {}
+    std::shared_ptr<Shader> GetShader() const override { return nullptr; } // Added missing override
+    bool IsUserCreatable() const override { return true; } // Added missing override
+
+    // Implement ISceneObject's mesh-related methods for the mock
+    IEditableMesh* GetEditableMesh() override { return nullptr; } // Mock does not have an editable mesh
+    bool IsMeshDirty() const override { return false; }
+    void SetMeshDirty(bool dirty) override {}
+
 private:
     std::string m_Type;
     PropertySet m_Properties;
@@ -38,8 +50,12 @@ private:
 class SceneTest : public ::testing::Test {
 protected:
     void SetUp() override {
-        factory.Register(std::string(ObjectTypes::Pyramid), []() {
+        // Register both a mock and a real pyramid for different tests
+        factory.Register(std::string(ObjectTypes::Pyramid) + "_Mock", []() {
             return std::make_unique<MockSceneObject>(std::string(ObjectTypes::Pyramid));
+        });
+        factory.Register(std::string(ObjectTypes::Pyramid), []() {
+            return std::make_unique<Pyramid>();
         });
         scene = std::make_unique<Scene>(&factory);
     }
@@ -50,7 +66,7 @@ protected:
 // --- Positive Tests ---
 
 TEST_F(SceneTest, AddAndGetObject) {
-    scene->AddObject(factory.Create(std::string(ObjectTypes::Pyramid)));
+    scene->AddObject(factory.Create(std::string(ObjectTypes::Pyramid) + "_Mock"));
     ASSERT_EQ(scene->GetSceneObjects().size(), 1);
     ISceneObject* obj = scene->GetObjectByID(1);
     ASSERT_NE(obj, nullptr);
@@ -58,14 +74,15 @@ TEST_F(SceneTest, AddAndGetObject) {
 }
 
 TEST_F(SceneTest, DeleteObject) {
-    scene->AddObject(factory.Create(std::string(ObjectTypes::Pyramid)));
+    scene->AddObject(factory.Create(std::string(ObjectTypes::Pyramid) + "_Mock"));
     ASSERT_EQ(scene->GetSceneObjects().size(), 1);
-    scene->DeleteObjectByID(1);
+    scene->QueueForDeletion(1);
+    scene->ProcessDeferredDeletions();
     ASSERT_EQ(scene->GetSceneObjects().size(), 0);
 }
 
 TEST_F(SceneTest, SelectObject) {
-    scene->AddObject(factory.Create(std::string(ObjectTypes::Pyramid)));
+    scene->AddObject(factory.Create(std::string(ObjectTypes::Pyramid) + "_Mock"));
     scene->SetSelectedObjectByID(1);
     ISceneObject* selected = scene->GetSelectedObject();
     ASSERT_NE(selected, nullptr);
@@ -74,8 +91,9 @@ TEST_F(SceneTest, SelectObject) {
 }
 
 TEST_F(SceneTest, DuplicateObject) {
-    auto pyramid = factory.Create(std::string(ObjectTypes::Pyramid));
-    pyramid->SetPosition({1, 2, 3});
+    auto pyramid = factory.Create(std::string(ObjectTypes::Pyramid) + "_Mock");
+    pyramid->name = "MyObject"; // Set a base name for testing auto-naming
+    pyramid->SetPosition({1.0f, 2.0f, 3.0f}); // Ensure distinct initial position
     scene->AddObject(std::move(pyramid));
     scene->DuplicateObject(1);
     ASSERT_EQ(scene->GetSceneObjects().size(), 2);
@@ -84,51 +102,91 @@ TEST_F(SceneTest, DuplicateObject) {
     ASSERT_NE(clone, nullptr);
     EXPECT_EQ(clone->GetTypeString(), original->GetTypeString());
     EXPECT_NE(clone->id, original->id);
-    EXPECT_NE(clone->GetPosition(), original->GetPosition());
+    
+    // Default cloneOffset in AppSettings is {0.5f, 0.5f, 0.0f}
+    EXPECT_EQ(clone->GetPosition(), original->GetPosition() + SettingsManager::Get().cloneOffset);
+    // Corrected expectation based on the bug fix: it should use the original name
+    EXPECT_EQ(clone->name, "MyObject (1)"); 
 }
 
 TEST_F(SceneTest, SaveAndLoad) {
-    scene->AddObject(factory.Create(std::string(ObjectTypes::Pyramid)));
+    const char* tempFilename = "temporary_scene_for_save_test.json";
+    scene->AddObject(factory.Create(std::string(ObjectTypes::Pyramid) + "_Mock"));
     ISceneObject* obj = scene->GetObjectByID(1);
     obj->name = "MyPyramid";
-    obj->SetPosition({5, 5, 5});
-    scene->Save("test_scene.json");
+    obj->SetPosition({5.0f, 5.0f, 5.0f});
+    scene->Save(tempFilename);
     scene->Clear();
-    scene->Load("test_scene.json");
-    ASSERT_EQ(scene->GetSceneObjects().size(), 1);
-    ISceneObject* loadedObject = scene->GetObjectByID(1);
+
+    SceneObjectFactory loadFactory;
+    loadFactory.Register(std::string(ObjectTypes::Pyramid), []() {
+        return std::make_unique<MockSceneObject>(std::string(ObjectTypes::Pyramid));
+    });
+    Scene loadScene(&loadFactory);
+    loadScene.Load(tempFilename);
+    
+    ASSERT_EQ(loadScene.GetSceneObjects().size(), 1);
+    ISceneObject* loadedObject = loadScene.GetObjectByID(1);
     ASSERT_NE(loadedObject, nullptr);
     EXPECT_EQ(loadedObject->name, "MyPyramid");
-    EXPECT_EQ(loadedObject->GetPosition(), glm::vec3(5, 5, 5));
-    std::remove("test_scene.json");
+    EXPECT_EQ(loadedObject->GetPosition(), glm::vec3(5.0f, 5.0f, 5.0f));
+    std::remove(tempFilename);
 }
+
+TEST_F(SceneTest, SaveAndLoadMaintainsUniqueProperties) {
+    const char* tempFilename = "property_test.json";
+    
+    // 1. Setup - Use the REAL Pyramid object
+    auto pyramid = factory.Create(std::string(ObjectTypes::Pyramid));
+    pyramid->GetPropertySet().SetValue<float>(PropertyNames::Width, 5.0f);
+    pyramid->GetPropertySet().SetValue<float>(PropertyNames::Height, 10.0f);
+    scene->AddObject(std::move(pyramid));
+    
+    // 2. Act
+    scene->Save(tempFilename);
+    scene->Clear();
+    
+    // Use a factory with the real pyramid for loading
+    SceneObjectFactory loadFactory;
+    loadFactory.Register(std::string(ObjectTypes::Pyramid), []() { return std::make_unique<Pyramid>(); });
+    Scene loadScene(&loadFactory);
+    loadScene.Load(tempFilename);
+
+    // 3. Assert
+    ASSERT_EQ(loadScene.GetSceneObjects().size(), 1);
+    ISceneObject* loadedObject = loadScene.GetObjectByID(1);
+    ASSERT_NE(loadedObject, nullptr);
+    
+    EXPECT_EQ(loadedObject->GetPropertySet().GetValue<float>(PropertyNames::Width), 5.0f);
+    EXPECT_EQ(loadedObject->GetPropertySet().GetValue<float>(PropertyNames::Height), 10.0f);
+
+    std::remove(tempFilename);
+}
+
 
 // --- Negative and Edge Case Tests ---
 
 TEST_F(SceneTest, GetNonExistentObject) {
-    // NEGATIVE: Trying to get an object that doesn't exist should return nullptr.
     EXPECT_EQ(scene->GetObjectByID(999), nullptr);
 }
 
 TEST_F(SceneTest, DeleteNonExistentObject) {
-    // NEGATIVE: Trying to delete an object that doesn't exist should not change the scene.
-    scene->AddObject(factory.Create(std::string(ObjectTypes::Pyramid)));
+    scene->AddObject(factory.Create(std::string(ObjectTypes::Pyramid) + "_Mock"));
     ASSERT_EQ(scene->GetSceneObjects().size(), 1);
-    scene->DeleteObjectByID(999);
+    scene->QueueForDeletion(999);
+    scene->ProcessDeferredDeletions();
     EXPECT_EQ(scene->GetSceneObjects().size(), 1);
 }
 
 TEST_F(SceneTest, DuplicateNonExistentObject) {
-    // NEGATIVE: Trying to duplicate an object that doesn't exist should not add a new object.
-    scene->AddObject(factory.Create(std::string(ObjectTypes::Pyramid)));
+    scene->AddObject(factory.Create(std::string(ObjectTypes::Pyramid) + "_Mock"));
     ASSERT_EQ(scene->GetSceneObjects().size(), 1);
     scene->DuplicateObject(999);
     EXPECT_EQ(scene->GetSceneObjects().size(), 1);
 }
 
 TEST_F(SceneTest, ClearScene) {
-    // EDGE CASE: Clearing the scene should remove all objects and reset selection.
-    scene->AddObject(factory.Create(std::string(ObjectTypes::Pyramid)));
+    scene->AddObject(factory.Create(std::string(ObjectTypes::Pyramid) + "_Mock"));
     scene->SetSelectedObjectByID(1);
     scene->Clear();
     EXPECT_EQ(scene->GetSceneObjects().size(), 0);
@@ -136,18 +194,17 @@ TEST_F(SceneTest, ClearScene) {
 }
 
 TEST_F(SceneTest, UniqueIDsAreAssigned) {
-    // EDGE CASE: Ensure that each new object gets a unique, incrementing ID.
-    scene->AddObject(factory.Create(std::string(ObjectTypes::Pyramid))); // ID 1
-    scene->AddObject(factory.Create(std::string(ObjectTypes::Pyramid))); // ID 2
-    scene->DeleteObjectByID(1);
-    scene->AddObject(factory.Create(std::string(ObjectTypes::Pyramid))); // Should get ID 3
+    scene->AddObject(factory.Create(std::string(ObjectTypes::Pyramid) + "_Mock")); // ID 1
+    scene->AddObject(factory.Create(std::string(ObjectTypes::Pyramid) + "_Mock")); // ID 2
+    scene->QueueForDeletion(1);
+    scene->ProcessDeferredDeletions();
+    scene->AddObject(factory.Create(std::string(ObjectTypes::Pyramid) + "_Mock")); // Should get ID 3
     EXPECT_NE(scene->GetObjectByID(2), nullptr);
     EXPECT_NE(scene->GetObjectByID(3), nullptr);
 }
 
 TEST_F(SceneTest, DeselectObject) {
-    // POSITIVE: Test that an object can be deselected.
-    scene->AddObject(factory.Create(std::string(ObjectTypes::Pyramid)));
+    scene->AddObject(factory.Create(std::string(ObjectTypes::Pyramid) + "_Mock"));
     scene->SetSelectedObjectByID(1);
     ASSERT_NE(scene->GetSelectedObject(), nullptr);
     scene->SetSelectedObjectByID(0); // ID 0 is reserved for "no selection"

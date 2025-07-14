@@ -8,25 +8,25 @@
 
 class ISceneObject;
 
-/**
- * @brief Simple factory for creating and cloning scene objects.
- */
 class SceneObjectFactory {
  public:
   using CreateFunc = std::function<std::unique_ptr<ISceneObject>()>;
 
-  /// Register a creator function for the given type name.
   void Register(const std::string& typeName, CreateFunc func);
 
-  /// Create a brand-new instance by type name.
   std::unique_ptr<ISceneObject> Create(const std::string& typeName) const;
 
-  /// Deep-copy @p src into a new ISceneObject of the same dynamic type.
   std::unique_ptr<ISceneObject> Copy(const ISceneObject& src) const;
 
-  /// List of all registered type names.
-  std::vector<std::string> GetRegisteredTypeNames() const;
+  std::vector<std::string> GetUserCreatableTypeNames() const;
 
  private:
-  std::unordered_map<std::string, CreateFunc> m_Registry;
+  // This struct holds all the necessary info for each registered type
+  struct RegistryEntry {
+    CreateFunc createFunc;
+    bool isUserCreatable;
+  };
+
+  // The map correctly stores the RegistryEntry struct
+  std::unordered_map<std::string, RegistryEntry> m_Registry;
 };

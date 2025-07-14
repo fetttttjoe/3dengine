@@ -2,6 +2,9 @@
 #include <functional>
 #include <glm/glm.hpp>
 
+#include "Core/Log.h"
+#include "Core/MathHelpers.h"
+
 struct GLFWwindow;
 
 class Camera {
@@ -14,25 +17,31 @@ class Camera {
   void ProcessMouseScroll(float yoffset);
   void SetAspectRatio(float aspectRatio);
 
+  void SetPosition(const glm::vec3& position) {
+    m_Position = position;
+    updateMatrices();
+  }
+  void SetYaw(float yaw) {
+    m_Yaw = yaw;
+    updateMatrices();
+  }
+  void SetPitch(float pitch) {
+    m_Pitch = pitch;
+    updateMatrices();
+  }
+
   const glm::mat4& GetViewMatrix() const { return m_ViewMatrix; }
   const glm::mat4& GetProjectionMatrix() const { return m_ProjectionMatrix; }
-
   glm::vec3 GetPosition() const { return m_Position; }
+  glm::vec3 GetFront() const { return m_Front; }
 
-  // Helpers to convert between world and screen coordinates
-  glm::vec2 WorldToScreen(const glm::vec3& worldPos, int windowWidth,
-                          int windowHeight) const;
-
-  // IMPROVEMENT: Renamed 'depth' parameter to 'ndcZ' for clarity. It expects a
-  // depth value in Normalized Device Coordinates [-1, 1], not world units.
-  glm::vec3 ScreenToWorldPoint(const glm::vec2& screenPos, float ndcZ,
-                               int windowWidth, int windowHeight) const;
+  glm::vec3 ScreenToWorldRay(const glm::vec2& screenPos, int windowWidth,
+                             int windowHeight) const;
 
  private:
   void updateMatrices();
-
   bool processKeyboard(float deltaTime);
-  bool processMouseMovement(float xoffset, float yoffset);
+  bool processMouseMovement();
 
   GLFWwindow* m_Window;
 

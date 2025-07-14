@@ -6,40 +6,48 @@
 
 void SceneObjectFactory::Register(const std::string& typeName,
                                   CreateFunc func) {
-  m_Registry[typeName] = std::move(func);
+  // Create a temporary instance to query its properties
+  auto tempInstance = func();
+  bool isCreatable = tempInstance->IsUserCreatable();
+
+  // Use emplace to construct the RegistryEntry directly in the map
+  // This avoids the previous move/copy issues and is more efficient.
+  m_Registry.emplace(typeName, RegistryEntry{std::move(func), isCreatable});
 }
 
 std::unique_ptr<ISceneObject> SceneObjectFactory::Create(
     const std::string& typeName) const {
   auto it = m_Registry.find(typeName);
   if (it != m_Registry.end()) {
-    return it->second();
+    // Correctly call the createFunc from the found entry
+    return it->second.createFunc();
   }
-  Log::Debug("[SceneObjectFactory] Error: Unknown object type '", typeName, "'");
+  Log::Debug("[SceneObjectFactory] Error: Unknown object type '", typeName,
+             "'");
   return nullptr;
 }
 
 std::unique_ptr<ISceneObject> SceneObjectFactory::Copy(
     const ISceneObject& src) const {
-  // 1) Create a new blank object of the same type
   auto clone = Create(src.GetTypeString());
   if (!clone) {
-    Log::Debug("[SceneObjectFactory::Copy] Failed to create a new instance of '",
-               src.GetTypeString(), "' for copying.");
+    Log::Debug(
+        "[SceneObjectFactory::Copy] Failed to create a new instance of '",
+        src.GetTypeString(), "' for copying.");
     return nullptr;
   }
-  // 2) Use serialization to transfer the state
   nlohmann::json j;
   src.Serialize(j);
   clone->Deserialize(j);
   return clone;
 }
 
-std::vector<std::string> SceneObjectFactory::GetRegisteredTypeNames() const {
+std::vector<std::string> SceneObjectFactory::GetUserCreatableTypeNames() const {
   std::vector<std::string> names;
-  names.reserve(m_Registry.size());
-  for (auto const& kv : m_Registry) {
-    names.push_back(kv.first);
+  for (const auto& pair : m_Registry) {
+    if (pair.second.isUserCreatable) {
+      names.push_back(pair.first);
+    }
   }
   return names;
 }

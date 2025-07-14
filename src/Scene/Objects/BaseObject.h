@@ -1,7 +1,5 @@
 #pragma once
 
-#include <glad/glad.h>
-
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 #include <memory>
@@ -9,6 +7,7 @@
 #include <vector>
 
 #include "Interfaces.h"
+#include "Sculpting/SculptableMesh.h"
 
 class Shader;
 
@@ -17,11 +16,17 @@ class BaseObject : public ISceneObject {
   BaseObject();
   ~BaseObject() override;
 
-  void Draw(const glm::mat4& view, const glm::mat4& projection) override;
+  // Draw methods delegate to the renderer
+  void Draw(class OpenGLRenderer& renderer, const glm::mat4& view,
+            const glm::mat4& projection) override;
   void DrawForPicking(Shader& pickingShader, const glm::mat4& view,
                       const glm::mat4& projection) override;
   void DrawHighlight(const glm::mat4& view,
                      const glm::mat4& projection) const override;
+
+  std::shared_ptr<Shader> GetShader() const override { return m_Shader; }
+
+  // --- ISceneObject Overrides ---
   std::string GetTypeString() const override = 0;
   void RebuildMesh() override;
   PropertySet& GetPropertySet() override { return m_Properties; }
@@ -34,25 +39,27 @@ class BaseObject : public ISceneObject {
   void SetRotation(const glm::quat& rotation) override;
   void SetScale(const glm::vec3& scale) override;
   void SetEulerAngles(const glm::vec3& eulerAngles) override;
-
   std::vector<GizmoHandleDef> GetGizmoHandleDefs() override;
   void OnGizmoUpdate(const std::string& propertyName, float delta,
                      const glm::vec3& axis) override;
+  IEditableMesh* GetEditableMesh() override { return m_SculptableMesh.get(); }
+  bool IsMeshDirty() const override { return m_IsMeshDirty; }
+  void SetMeshDirty(bool dirty) override { m_IsMeshDirty = dirty; }
 
  protected:
   virtual void BuildMeshData(std::vector<float>& vertices,
                              std::vector<unsigned int>& indices) = 0;
   virtual glm::vec3 GetLocalCenter() const;
-  void SetupMesh(const std::vector<float>& vertices,
-                 const std::vector<unsigned int>& indices);
 
-  GLuint m_VAO = 0, m_VBO = 0, m_EBO = 0;
-  GLsizei m_IndexCount = 0;
   std::shared_ptr<Shader> m_Shader;
   PropertySet m_Properties;
+
   mutable bool m_IsTransformDirty = true;
+  bool m_IsMeshDirty = true;
+
+  std::unique_ptr<SculptableMesh> m_SculptableMesh;
 
  private:
-  void RecalculateTransformMatrix();
+  void RecalculateTransformMatrix() const;
   mutable glm::mat4 m_TransformMatrix;
 };

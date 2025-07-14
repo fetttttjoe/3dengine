@@ -1,13 +1,17 @@
 #pragma once
 
-#include <functional>
+#include "Core/UI/IView.h"
 
-class ToolsPane {
+// Forward declarations
+class Application;
+
+class ToolsPane : public IView {
  public:
-  ToolsPane();
-  void Draw(bool& showMetricsWindow);  // showMetricsWindow is passed by
-                                       // reference to allow modification
+  explicit ToolsPane(Application* app);
 
-  // Callbacks for actions in the tools pane
-  std::function<void()> OnResetCamera;
+  void Draw() override;
+  const char* GetName() const override { return "ToolsPane"; }
+
+ private:
+  Application* m_App;
 };

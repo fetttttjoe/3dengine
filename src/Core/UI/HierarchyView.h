@@ -1,26 +1,20 @@
 #pragma once
 
-#include <Interfaces.h>
-
 #include <cstdint>
-#include <functional>
 #include <string>
+
+#include "Core/UI/IView.h"
+
 // Forward declarations
+class Application;
 class Scene;
-class Application;  // Needed for SelectObject, GetTransformGizmo
 
-class HierarchyView {
+class HierarchyView : public IView {
  public:
-  explicit HierarchyView(
-      Application* app,
-      Scene* scene);  // Needs both App and Scene for interactions
+  explicit HierarchyView(Application* app);
 
-  void Draw();
-
-  // Callbacks for actions that affect the application/scene
-  std::function<void(uint32_t)> OnObjectSelected;
-  std::function<void(uint32_t)> OnObjectDeleted;
-  std::function<void(uint32_t)> OnObjectDuplicated;
+  void Draw() override;
+  const char* GetName() const override { return "HierarchyView"; }
 
  private:
   Application* m_App;
@@ -28,5 +22,4 @@ class HierarchyView {
 
   uint32_t m_RenameID = 0;
   std::string m_RenameBuffer;
-  uint32_t m_IdToDelete = 0;
 };

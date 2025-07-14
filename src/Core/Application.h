@@ -1,12 +1,12 @@
-// Core/Application.h
 #pragma once
 
 #include <Interfaces.h>
-
 #include <glm/glm.hpp>
 #include <memory>
 #include <string>
 #include <vector>
+#include "Sculpting/ISculptTool.h"
+
 // Forward declarations
 struct GLFWwindow;
 class Camera;
@@ -14,8 +14,15 @@ class OpenGLRenderer;
 class Scene;
 class SceneObjectFactory;
 class TransformGizmo;
-// class UI; // Old forward declaration
-class AppUI;  // New forward declaration
+class AppUI;
+class PushPullTool;
+class SmoothTool;
+class GrabTool;
+class SubObjectSelection;
+class MeshEditor;
+
+enum class EditorMode { TRANSFORM, SCULPT, SUB_OBJECT };
+
 class Application {
  public:
   Application(int initialWidth, int initialHeight);
@@ -23,53 +30,118 @@ class Application {
 
   void Run();
 
-  // Accessors for UI, Scene, etc. used by other parts of the system
+  // --- Core System Accessors ---
   Scene* GetScene() const { return m_Scene.get(); }
   TransformGizmo* GetTransformGizmo() const { return m_TransformGizmo.get(); }
-  SceneObjectFactory* GetObjectFactory() const {
-    return m_ObjectFactory.get();
-  }  // Added this getter
-  bool GetShowAnchors() const { return m_ShowAnchors; }
-  void SetShowAnchors(bool show) { m_ShowAnchors = show; }
+  SceneObjectFactory* GetObjectFactory() const { return m_ObjectFactory.get(); }
+  AppUI* GetUI() const { return m_UI.get(); }
+  OpenGLRenderer* GetRenderer() const { return m_Renderer.get(); }
+  Camera* GetCamera() const { return m_Camera.get(); }
+  GLFWwindow* GetWindow() { return m_Window; }
+  SubObjectSelection* GetSelection() { return m_Selection.get(); }
 
-  void SelectObject(uint32_t id);  // Method to select an object, called by UI
+  // --- State Management ---
+  void SelectObject(uint32_t id);
+  void SetEditorMode(EditorMode newMode,
+                     SculptMode::Mode newSculptMode = SculptMode::Pull,
+                     SubObjectMode newSubObjectMode = SubObjectMode::VERTEX);
+  EditorMode GetEditorMode() const { return m_EditorMode; }
+  SculptMode::Mode GetSculptMode() const { return m_SculptMode; }
+  SubObjectMode GetSubObjectMode() const { return m_SubObjectMode; }
+  bool GetShowAnchors() const { return m_ShowAnchors; }
+  void SetShowAnchors(bool show) {
+    m_ShowAnchors = show;
+    RequestSceneRender();
+  }
+  void SetShowSettings(bool show) { m_ShowSettingsWindow = show; }
+  bool GetShowSettings() const { return m_ShowSettingsWindow; }
+  void SetShowMetricsWindow(bool show) { m_ShowMetricsWindow = show; }
+  bool GetShowMetricsWindow() const { return m_ShowMetricsWindow; }
+
+  // --- Scene Render Request ---
+  void RequestSceneRender() { m_SceneRenderRequested = true; }
+
+  // --- Actions ---
+  void OnSceneLoaded();
+  void ImportModel(const std::string& filepath);
+  void Exit();
+  void RequestObjectDuplication(uint32_t objectID);
+  void RequestObjectDeletion(uint32_t objectID);
+  void RequestObjectCreation(const std::string& typeName);
+  void RequestExtrude(float distance);
+  void RequestWeld();
+  void RequestBevelEdge(float amount);
+  void RequestMoveSelection(float distance);
+
+  // --- Singleton Accessor ---
+  static Application& Get();
+
+#if defined(INTUITIVE_MODELER_TESTING)
+  void ProcessPendingActions_ForTests() { ProcessPendingActions(); }
+#endif
 
  private:
   void Initialize();
   void Cleanup();
-  void RegisterObjectTypes();  // Registers object types with m_ObjectFactory
+  void RegisterObjectTypes();
 
-  void processKeyboardInput();
-  void processMouseInput();
+  void Update();
+  void Render();
 
-  // GLFW callbacks
+  void ProcessPendingActions();
+  void processGlobalKeyboardShortcuts();
+  void processMouseActions();
+  void processSculpting();
+
   static void framebuffer_size_callback(GLFWwindow* window, int w, int h);
-  static void scroll_callback(GLFWwindow* window, double xoffset,
-                              double yoffset);
-  static void cursor_position_callback(GLFWwindow* window, double xpos,
-                                       double ypos);
+  static void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
+  static void cursor_position_callback(GLFWwindow* window, double xpos, double ypos);
   static void error_callback(int error, const char* desc);
+
+  // --- Singleton Instance ---
+  static Application* s_Instance;
 
   GLFWwindow* m_Window = nullptr;
   int m_WindowWidth;
   int m_WindowHeight;
 
-  std::unique_ptr<Camera> m_Camera;
-  std::unique_ptr<OpenGLRenderer> m_Renderer;
-  std::unique_ptr<Scene> m_Scene;
+  // --- Core Systems ---
   std::unique_ptr<SceneObjectFactory> m_ObjectFactory;
+  std::unique_ptr<OpenGLRenderer> m_Renderer;
+  std::unique_ptr<AppUI> m_UI;
+  std::unique_ptr<Scene> m_Scene;
+  std::unique_ptr<Camera> m_Camera;
   std::unique_ptr<TransformGizmo> m_TransformGizmo;
-  std::unique_ptr<AppUI> m_UI;  // Changed type from UI to AppUI
+  std::unique_ptr<PushPullTool> m_PushPullTool;
+  std::unique_ptr<SmoothTool> m_SmoothTool;
+  std::unique_ptr<GrabTool> m_GrabTool;
+  std::unique_ptr<SubObjectSelection> m_Selection;
+  std::unique_ptr<MeshEditor> m_MeshEditor;
 
-  float m_LastFrame = 0.0f;
-  float m_DeltaTime = 0.0f;
+  EditorMode m_EditorMode = EditorMode::TRANSFORM;
+  SculptMode::Mode m_SculptMode = SculptMode::Pull;
+  SubObjectMode m_SubObjectMode = SubObjectMode::VERTEX;
+  float m_LastFrame = 0.0f, m_DeltaTime = 0.0f;
+  bool m_ShowAnchors = true;
+  bool m_ShowSettingsWindow = false;
+  bool m_ShowMetricsWindow = false;
 
-  bool m_ShowAnchors = true;  // State for showing/hiding scene anchors
+  bool m_SceneRenderRequested = true;
 
-  // Mouse picking/dragging state
-  glm::vec2 m_LastMousePos = {0, 0};
-  bool m_IsDraggingObject = false;
+  glm::vec2 m_LastViewportSize = {0, 0};
+  bool m_IsDraggingGizmo = false;
+  bool m_IsSculpting = false;
   ISceneObject* m_DraggedObject = nullptr;
   float m_DragNDCDepth = 0.0f;
-  bool m_IsDraggingGizmo = false;
+
+  std::vector<std::string> m_RequestedCreationTypeNames;
+  uint32_t m_RequestedDuplicateID = 0;
+  std::vector<uint32_t> m_RequestedDeletionIDs;
+  bool m_ExtrudeRequested = false;
+  float m_ExtrudeDistance = 0.1f;
+  bool m_BevelRequested = false;
+  float m_BevelAmount = 0.1f;
+  bool m_WeldRequested = false;
+  bool m_MoveSelectionRequested = false;
+  float m_MoveSelectionDistance = 0.1f;
 };

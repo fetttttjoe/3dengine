@@ -1,49 +1,36 @@
 #include "Core/UI/HierarchyView.h"
 
 #include <imgui.h>
-#include <imgui_stdlib.h>  // For ImGui::InputText with std::string
+#include <imgui_stdlib.h>
 
-#include <algorithm>
-
-#include "Core/Application.h"  // For access to SelectObject, GetTransformGizmo
-#include "Scene/Objects/ObjectTypes.h"
+#include "Core/Application.h"
 #include "Scene/Scene.h"
-#include "Scene/TransformGizmo.h"  // For SetTarget(nullptr)
 
-HierarchyView::HierarchyView(Application* app, Scene* scene)
-    : m_App(app), m_Scene(scene) {}
+HierarchyView::HierarchyView(Application* app)
+    : m_App(app), m_Scene(app->GetScene()) {}
 
 void HierarchyView::Draw() {
-  if (m_IdToDelete) {
-    if (auto* sel = m_Scene->GetSelectedObject();
-        sel && sel->id == m_IdToDelete)
-      m_App->GetTransformGizmo()->SetTarget(nullptr);  // Deselect gizmo target
-    m_Scene->DeleteObjectByID(m_IdToDelete);
-    m_IdToDelete = 0;
-    m_RenameID = 0;  // Clear rename state if deleted
-    if (OnObjectDeleted) OnObjectDeleted(m_IdToDelete);  // Notify
-  }
-
-  uint32_t dupID = 0;
   if (ImGui::BeginTable(
           "object_list", 3,
           ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_RowBg)) {
     ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthStretch);
-    ImGui::TableSetupColumn("Dup", ImGuiTableColumnFlags_WidthFixed, 80);
-    ImGui::TableSetupColumn("Del", ImGuiTableColumnFlags_WidthFixed, 65);
+    ImGui::TableSetupColumn("Dup##Mode", ImGuiTableColumnFlags_WidthFixed, 40);
+    ImGui::TableSetupColumn("Del##Mode", ImGuiTableColumnFlags_WidthFixed, 40);
     ImGui::TableHeadersRow();
 
     for (auto& obj : m_Scene->GetSceneObjects()) {
-      if (!obj->isSelectable) continue;
+      if (!obj || !obj->isSelectable) continue;
       uint32_t oid = obj->id;
       ImGui::PushID(int(oid));
       ImGui::TableNextRow();
       ImGui::TableNextColumn();
 
+      // ... (Rename logic remains the same) ...
       if (oid == m_RenameID) {
         ImGui::PushItemWidth(-1);
         if (ImGui::InputText("##rename", &m_RenameBuffer,
-                             ImGuiInputTextFlags_EnterReturnsTrue)) {
+                             ImGuiInputTextFlags_EnterReturnsTrue |
+                                 ImGuiInputTextFlags_AutoSelectAll)) {
           obj->name = m_RenameBuffer;
           m_RenameID = 0;
         }
@@ -55,26 +42,30 @@ void HierarchyView::Draw() {
       } else {
         bool sel = (obj.get() == m_Scene->GetSelectedObject());
         if (ImGui::Selectable(obj->name.c_str(), sel)) {
-          if (OnObjectSelected) OnObjectSelected(oid);
+          m_App->SelectObject(oid);
         }
         if (ImGui::IsItemHovered() &&
             ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
           m_RenameID = oid;
           m_RenameBuffer = obj->name;
-          if (OnObjectSelected)
-            OnObjectSelected(oid);  // Also select on double-click
+          m_App->SelectObject(oid);
         }
       }
 
       ImGui::TableNextColumn();
-      if (ImGui::Button("Dup##dup")) dupID = oid;
+      if (ImGui::Button("Dup")) {
+        // 1. Request duplication instead of doing it directly
+        m_App->RequestObjectDuplication(oid);
+      }
 
       ImGui::TableNextColumn();
-      if (ImGui::Button("Del##del")) m_IdToDelete = oid;
+      if (ImGui::Button("Del")) {
+        // 2. Request deletion instead of queueing it directly in the scene
+        m_App->RequestObjectDeletion(oid);
+      }
 
       ImGui::PopID();
     }
     ImGui::EndTable();
   }
-  if (dupID && OnObjectDuplicated) OnObjectDuplicated(dupID);
 }
