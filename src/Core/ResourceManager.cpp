@@ -1,28 +1,20 @@
 #include "Core/ResourceManager.h"
-
 #include <glm/glm.hpp>
 #include <unordered_map>
-
 #include "Core/Log.h"
 #include "Shader.h"
+#define TINYOBJLOADER_IMPLEMENTATION
 #include "tiny_obj_loader.h"
 
-// Define the hash function for glm::vec3 so the map can use it
-struct Vec3Hash {
-  std::size_t operator()(const glm::vec3& v) const {
-    auto h1 = std::hash<float>()(v.x);
-    auto h2 = std::hash<float>()(v.y);
-    auto h3 = std::hash<float>()(v.z);
-    return h1 ^ (h2 << 1) ^ (h3 << 2);
-  }
-};
+#include <functional> // For std::hash
+
 
 // Initialize static variables
 std::unordered_map<std::string, std::shared_ptr<Shader>>
     ResourceManager::s_Shaders;
 
 void ResourceManager::Initialize() {
-  Log::Debug("ResourceManager Initialized.");
+  // This can be empty or used for pre-loading common resources.
 }
 
 void ResourceManager::Shutdown() {
@@ -32,25 +24,25 @@ void ResourceManager::Shutdown() {
 std::shared_ptr<Shader> ResourceManager::LoadShader(
     const std::string& name, const std::string& vShaderFile,
     const std::string& fShaderFile) {
-  std::string file_key = vShaderFile + "::" + fShaderFile;
-
-  if (s_Shaders.count(file_key)) {
-    return s_Shaders[file_key];
+  // CORRECTED: Use the provided 'name' as the key for caching.
+  if (s_Shaders.count(name)) {
+    return s_Shaders[name];
   }
 
   try {
     auto shader = std::make_shared<Shader>(vShaderFile, fShaderFile);
-    s_Shaders[file_key] = shader;
+    s_Shaders[name] = shader; // Cache by name
     Log::Debug("ResourceManager: Compiled and loaded shader '", name,
                "' from files: ", vShaderFile);
     return shader;
   } catch (const std::exception& e) {
     Log::Debug("!!! ResourceManager: FAILED to load shader '", name,
                "'. Reason: ", e.what());
-    s_Shaders[file_key] = nullptr;
-    return nullptr;
+    s_Shaders[name] = nullptr; // Cache the failure to avoid re-trying
+    throw; // Re-throw the exception so the caller knows it failed
   }
 }
+
 std::shared_ptr<Shader> ResourceManager::LoadShaderFromMemory(
     const std::string& name, const char* vShaderSource,
     const char* fShaderSource) {
@@ -64,7 +56,7 @@ std::shared_ptr<Shader> ResourceManager::LoadShaderFromMemory(
 }
 
 std::shared_ptr<Shader> ResourceManager::GetShader(const std::string& name) {
-  if (s_Shaders.find(name) != s_Shaders.end()) {
+  if (s_Shaders.count(name)) {
     return s_Shaders[name];
   }
   Log::Debug("Error: Shader '", name, "' not found in ResourceManager.");
@@ -88,22 +80,23 @@ ResourceManager::LoadMesh(const std::string& filepath) {
 
   std::vector<float> vertices;
   std::vector<unsigned int> indices;
-  std::unordered_map<glm::vec3, uint32_t, Vec3Hash> uniqueVertices{};
+  // CORRECTED: Use a map to track unique vertices based on their full index triplet
+  std::unordered_map<tinyobj::index_t, uint32_t> uniqueVertices{};
 
   for (const auto& shape : shapes) {
     for (const auto& index : shape.mesh.indices) {
-      glm::vec3 vertex{};
-      vertex.x = attrib.vertices[3 * index.vertex_index + 0];
-      vertex.y = attrib.vertices[3 * index.vertex_index + 1];
-      vertex.z = attrib.vertices[3 * index.vertex_index + 2];
-
-      if (uniqueVertices.count(vertex) == 0) {
-        uniqueVertices[vertex] = static_cast<uint32_t>(vertices.size() / 3);
-        vertices.push_back(vertex.x);
-        vertices.push_back(vertex.y);
-        vertices.push_back(vertex.z);
+      if (uniqueVertices.count(index) == 0) {
+        // This is a new, unique vertex
+        uniqueVertices[index] = static_cast<uint32_t>(vertices.size() / 3);
+        
+        // Position
+        vertices.push_back(attrib.vertices[3 * index.vertex_index + 0]);
+        vertices.push_back(attrib.vertices[3 * index.vertex_index + 1]);
+        vertices.push_back(attrib.vertices[3 * index.vertex_index + 2]);
+        
+        // We could also add normals and texcoords here if our vertex format supported it
       }
-      indices.push_back(uniqueVertices[vertex]);
+      indices.push_back(uniqueVertices[index]);
     }
   }
   return {vertices, indices};

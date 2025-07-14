@@ -8,7 +8,7 @@
 
 #include "Core/Application.h" // Needed to access Application::Get()
 #include "TestMocks.h" // Needed for MockCamera::s_CameraPosition etc.
-#include "Core/MathHelpers.h" // For MathHelpers::ToString
+#include "Core/MathHelpers.h" // For MathHelpers::ToString, and direct calls
 
 class CameraTest : public ::testing::Test {
 protected:
@@ -46,13 +46,15 @@ TEST_F(CameraTest, WorldToScreen_ScreenToWorldPoint_Roundtrip) {
 
     glm::vec3 testWorldPoint(1.0f, 2.0f, 0.0f);
 
-    glm::vec2 screenPos = Camera::WorldToScreen(testWorldPoint, viewProj, windowWidth, windowHeight);
+    // Use MathHelpers::WorldToScreen directly
+    glm::vec2 screenPos = MathHelpers::WorldToScreen(testWorldPoint, viewProj, windowWidth, windowHeight);
     Log::Debug("Test Point: ", MathHelpers::ToString(testWorldPoint), " -> Screen: ", MathHelpers::ToString(screenPos));
 
     glm::vec4 clipPos = viewProj * glm::vec4(testWorldPoint, 1.0f);
     float originalNdcZ = clipPos.z / clipPos.w;
 
-    glm::vec3 reconstructedWorldPoint = Camera::ScreenToWorldPoint(screenPos, originalNdcZ, invViewProj, windowWidth, windowHeight);
+    // Use MathHelpers::ScreenToWorldPoint directly
+    glm::vec3 reconstructedWorldPoint = MathHelpers::ScreenToWorldPoint(screenPos, originalNdcZ, invViewProj, windowWidth, windowHeight);
     Log::Debug("Reconstructed: ", MathHelpers::ToString(reconstructedWorldPoint));
 
     EXPECT_NEAR(reconstructedWorldPoint.x, testWorldPoint.x, 1e-4f);
@@ -68,7 +70,8 @@ TEST_F(CameraTest, WorldToScreen_OriginCenter) {
 
     glm::mat4 viewProj = tempCamera.GetProjectionMatrix() * tempCamera.GetViewMatrix();
     glm::vec3 worldOrigin(0.0f, 0.0f, 0.0f);
-    glm::vec2 screenCenter = Camera::WorldToScreen(worldOrigin, viewProj, windowWidth, windowHeight);
+    // Use MathHelpers::WorldToScreen directly
+    glm::vec2 screenCenter = MathHelpers::WorldToScreen(worldOrigin, viewProj, windowWidth, windowHeight);
     
     EXPECT_NEAR(screenCenter.x, windowWidth / 2.0f, 1e-3f);
     EXPECT_NEAR(screenCenter.y, windowHeight / 2.0f, 1e-3f);
@@ -79,8 +82,9 @@ TEST_F(CameraTest, ScreenToWorldPoint_DifferentDepths) {
     glm::mat4 invViewProj = glm::inverse(viewProj);
     glm::vec2 screenCenter(windowWidth / 2.0f, windowHeight / 2.0f);
 
-    glm::vec3 worldPointNear = Camera::ScreenToWorldPoint(screenCenter, -1.0f, invViewProj, windowWidth, windowHeight);
-    glm::vec3 worldPointFar = Camera::ScreenToWorldPoint(screenCenter, 1.0f, invViewProj, windowWidth, windowHeight);
+    // Use MathHelpers::ScreenToWorldPoint directly
+    glm::vec3 worldPointNear = MathHelpers::ScreenToWorldPoint(screenCenter, -1.0f, invViewProj, windowWidth, windowHeight);
+    glm::vec3 worldPointFar = MathHelpers::ScreenToWorldPoint(screenCenter, 1.0f, invViewProj, windowWidth, windowHeight);
 
     EXPECT_LT(glm::distance(worldPointNear, cameraPtr->GetPosition()), glm::distance(worldPointFar, cameraPtr->GetPosition()));
     EXPECT_NE(worldPointNear, worldPointFar);
@@ -88,7 +92,8 @@ TEST_F(CameraTest, ScreenToWorldPoint_DifferentDepths) {
 
 TEST_F(CameraTest, ScreenToWorldRay_IsNormalized) {
     glm::vec2 screenPos(100, 100);
-    glm::vec3 rayDirection = cameraPtr->ScreenToWorldRay(screenPos, windowWidth, windowHeight);
+    // Use MathHelpers::ScreenToWorldRay directly, passing camera's matrices
+    glm::vec3 rayDirection = MathHelpers::ScreenToWorldRay(screenPos, cameraPtr->GetProjectionMatrix(), cameraPtr->GetViewMatrix(), windowWidth, windowHeight);
     EXPECT_NEAR(glm::length(rayDirection), 1.0f, 1e-6f) << "Ray direction should be normalized.";
 }
 
@@ -99,7 +104,8 @@ TEST_F(CameraTest, ScreenToWorldRay_PointsFromCameraPosition) {
     tempCamera.SetAspectRatio(static_cast<float>(windowWidth) / windowHeight);
 
     glm::vec2 screenCenterPos(windowWidth / 2.0f, windowHeight / 2.0f);
-    glm::vec3 rayDirection = tempCamera.ScreenToWorldRay(screenCenterPos, windowWidth, windowHeight);
+    // Use MathHelpers::ScreenToWorldRay directly, passing camera's matrices
+    glm::vec3 rayDirection = MathHelpers::ScreenToWorldRay(screenCenterPos, tempCamera.GetProjectionMatrix(), tempCamera.GetViewMatrix(), windowWidth, windowHeight);
     
     glm::vec3 expectedRayDirectionAtCenter = glm::normalize(glm::vec3(0,0,0) - tempCamera.GetPosition());
     EXPECT_NEAR(rayDirection.x, expectedRayDirectionAtCenter.x, 1e-4f);
@@ -141,4 +147,59 @@ TEST_F(CameraTest, ResetToDefault_ReturnsToInitialState) {
     cameraPtr->ResetToDefault();
 
     EXPECT_EQ(cameraPtr->GetPosition(), glm::vec3(0.0f, 2.0f, 8.0f)) << "Camera position should reset to default.";
+}
+
+// New tests for MathHelpers utility functions
+TEST_F(CameraTest, MathHelpers_WorldToScreen_KnownPoints) {
+    glm::mat4 view = glm::lookAt(glm::vec3(0, 0, 5), glm::vec3(0, 0, 0), glm::vec3(0, 1, 0));
+    glm::mat4 proj = glm::perspective(glm::radians(45.0f), (float)windowWidth / windowHeight, 0.1f, 100.0f);
+    glm::mat4 viewProj = proj * view;
+
+    // Point at origin should be near center of screen
+    glm::vec2 screenCenter = MathHelpers::WorldToScreen(glm::vec3(0, 0, 0), viewProj, windowWidth, windowHeight);
+    EXPECT_NEAR(screenCenter.x, windowWidth / 2.0f, 1.0f);
+    EXPECT_NEAR(screenCenter.y, windowHeight / 2.0f, 1.0f);
+
+    // Point to the right
+    glm::vec2 screenRight = MathHelpers::WorldToScreen(glm::vec3(1, 0, 0), viewProj, windowWidth, windowHeight);
+    EXPECT_GT(screenRight.x, screenCenter.x);
+
+    // Point to the left
+    glm::vec2 screenLeft = MathHelpers::WorldToScreen(glm::vec3(-1, 0, 0), viewProj, windowWidth, windowHeight);
+    EXPECT_LT(screenLeft.x, screenCenter.x);
+}
+
+TEST_F(CameraTest, MathHelpers_ScreenToWorldPoint_KnownPoints) {
+    glm::mat4 view = glm::lookAt(glm::vec3(0, 0, 5), glm::vec3(0, 0, 0), glm::vec3(0, 1, 0));
+    glm::mat4 proj = glm::perspective(glm::radians(45.0f), (float)windowWidth / windowHeight, 0.1f, 100.0f);
+    glm::mat4 invViewProj = glm::inverse(proj * view);
+
+    // Screen center, near plane (NDC Z = -1.0)
+    glm::vec2 screenCenter(windowWidth / 2.0f, windowHeight / 2.0f);
+    glm::vec3 worldPointNear = MathHelpers::ScreenToWorldPoint(screenCenter, -1.0f, invViewProj, windowWidth, windowHeight);
+    // The exact value depends on the projection matrix's near plane and FOV, but it should be on the Z-axis in world space.
+    EXPECT_NEAR(worldPointNear.x, 0.0f, 1e-4f);
+    EXPECT_NEAR(worldPointNear.y, 0.0f, 1e-4f);
+    EXPECT_LT(worldPointNear.z, cameraPtr->GetPosition().z); // Should be in front of camera
+
+    // Screen center, far plane (NDC Z = 1.0)
+    glm::vec3 worldPointFar = MathHelpers::ScreenToWorldPoint(screenCenter, 1.0f, invViewProj, windowWidth, windowHeight);
+    EXPECT_NEAR(worldPointFar.x, 0.0f, 1e-4f);
+    EXPECT_NEAR(worldPointFar.y, 0.0f, 1e-4f);
+    EXPECT_LT(worldPointFar.z, worldPointNear.z); // Should be further away
+}
+
+TEST_F(CameraTest, MathHelpers_ScreenToWorldRay_Accuracy) {
+    glm::mat4 view = glm::lookAt(glm::vec3(0, 0, 5), glm::vec3(0, 0, 0), glm::vec3(0, 1, 0));
+    glm::mat4 proj = glm::perspective(glm::radians(45.0f), (float)windowWidth / windowHeight, 0.1f, 100.0f);
+
+    // Ray from center of screen should point directly at (0,0,0) (camera looks at origin)
+    glm::vec2 screenCenter(windowWidth / 2.0f, windowHeight / 2.0f);
+    glm::vec3 rayDirection = MathHelpers::ScreenToWorldRay(screenCenter, proj, view, windowWidth, windowHeight);
+    
+    // Expected direction from (0,0,5) to (0,0,0) is (0,0,-1)
+    EXPECT_NEAR(rayDirection.x, 0.0f, 1e-4f);
+    EXPECT_NEAR(rayDirection.y, 0.0f, 1e-4f);
+    EXPECT_NEAR(rayDirection.z, -1.0f, 1e-4f);
+    EXPECT_NEAR(glm::length(rayDirection), 1.0f, 1e-6f);
 }

@@ -48,7 +48,7 @@ bool OpenGLRenderer::Initialize(void* windowHandle) {
 
   glEnable(GL_DEPTH_TEST);
   glEnable(GL_BLEND);
-  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); 
 
   m_PickingShader = ResourceManager::LoadShader(
       "picking", "shaders/picking.vert", "shaders/picking.frag");
@@ -80,10 +80,13 @@ bool OpenGLRenderer::Initialize(void* windowHandle) {
   return true;
 }
 
+
 void OpenGLRenderer::SyncSceneObjects(const Scene& scene) {
   for (auto it = m_GpuResources.begin(); it != m_GpuResources.end();) {
     if (scene.GetObjectByID(it->first) == nullptr) {
-      it->second.Release();
+      // Object is removed from scene, so release its GPU resources.
+      // GpuMeshResources::Release() is idempotent and handles glDelete*.
+      it->second.Release(); 
       it = m_GpuResources.erase(it);
     } else {
       ++it;
@@ -149,25 +152,41 @@ void OpenGLRenderer::cleanupFramebuffers() {
   glDeleteRenderbuffers(1, &m_SceneDepthRBO);
 }
 
+void OpenGLRenderer::ClearAllGpuResources() {
+    for (auto& pair : m_GpuResources) {
+        pair.second.Release(); // Explicitly call Release() for each GpuMeshResources struct
+    }
+    m_GpuResources.clear();
+}
+
 void OpenGLRenderer::Shutdown() {
   Log::Debug("OpenGLRenderer shutdown.");
   cleanupFramebuffers();
 
-  glDeleteVertexArrays(1, &m_GizmoVAO);
-  glDeleteBuffers(1, &m_GizmoVBO);
-  glDeleteBuffers(1, &m_GizmoEBO);
-  glDeleteVertexArrays(1, &m_AnchorVAO);
-  glDeleteBuffers(1, &m_AnchorVBO);
-  glDeleteBuffers(1, &m_AnchorEBO);
-  glDeleteVertexArrays(1, &m_GridVAO);
-  glDeleteBuffers(1, &m_GridVBO);
-  if (m_SelectedFacesVAO) glDeleteVertexArrays(1, &m_SelectedFacesVAO);
-  if (m_SelectedFacesVBO) glDeleteBuffers(1, &m_SelectedFacesVBO);
+  // Explicitly clear all GPU resources, ensuring their GL IDs are deleted.
+  ClearAllGpuResources(); 
 
-  for (auto& pair : m_GpuResources) {
-    pair.second.Release();
-  }
-  m_GpuResources.clear();
+  // Delete remaining global GL objects managed directly by OpenGLRenderer
+  if (m_GizmoVAO != 0) glDeleteVertexArrays(1, &m_GizmoVAO);
+  if (m_GizmoVBO != 0) glDeleteBuffers(1, &m_GizmoVBO);
+  if (m_GizmoEBO != 0) glDeleteBuffers(1, &m_GizmoEBO);
+  m_GizmoVAO = m_GizmoVBO = m_GizmoEBO = 0;
+
+  if (m_AnchorVAO != 0) glDeleteVertexArrays(1, &m_AnchorVAO);
+  if (m_AnchorVBO != 0) glDeleteBuffers(1, &m_AnchorVBO);
+  if (m_AnchorEBO != 0) glDeleteBuffers(1, &m_AnchorEBO);
+  m_AnchorVAO = m_AnchorVBO = m_AnchorEBO = 0;
+
+  if (m_GridVAO != 0) glDeleteVertexArrays(1, &m_GridVAO);
+  if (m_GridVBO != 0) glDeleteBuffers(1, &m_GridVBO);
+  m_GridVAO = m_GridVBO = 0;
+
+  if (m_SelectedFacesVAO != 0) glDeleteVertexArrays(1, &m_SelectedFacesVAO);
+  if (m_SelectedFacesVBO != 0) glDeleteBuffers(1, &m_SelectedFacesVBO);
+  m_SelectedFacesVAO = m_SelectedFacesVBO = 0;
+
+  // Shaders are managed by ResourceManager's static map and cleaned up globally
+  // when ResourceManager::Shutdown() is called, which happens in Application's destructor.
 }
 
 void OpenGLRenderer::RenderSelectedFaces(

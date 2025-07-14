@@ -206,7 +206,7 @@ void Scene::DuplicateObject(uint32_t sourceID) {
   clone->id = m_NextObjectID++;
 
   {
-    std::string base = orig->GetTypeString();
+    std::string base = orig->name;
     int idx = GetNextAvailableIndexForName(base);
     clone->name = (idx == 0) ? base : base + " (" + std::to_string(idx) + ")";
   }

@@ -256,11 +256,9 @@ void Application::SelectObject(uint32_t id) {
 void Application::SetEditorMode(EditorMode newMode,
                                 SculptMode::Mode newSculptMode,
                                 SubObjectMode newSubObjectMode) {
-  Log::Debug(
-      "Application::SetEditorMode called. newMode: %d, newSculptMode: %d, "
-      "newSubObjectMode: %d",
-      static_cast<int>(newMode), static_cast<int>(newSculptMode),
-      static_cast<int>(newSubObjectMode));
+  Log::Debug("Application::SetEditorMode called. newMode: ", static_cast<int>(newMode),
+             ", newSculptMode: ", static_cast<int>(newSculptMode),
+             ", newSubObjectMode: ", static_cast<int>(newSubObjectMode));
 
   if (m_EditorMode == newMode && m_SculptMode == newSculptMode &&
       m_SubObjectMode == newSubObjectMode)

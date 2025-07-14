@@ -24,10 +24,13 @@ struct GpuMeshResources {
   GLsizei indexCount = 0;
 
   void Release() {
-    if (ebo) glDeleteBuffers(1, &ebo);
-    if (vboPositions) glDeleteBuffers(1, &vboPositions);
-    if (vboNormals) glDeleteBuffers(1, &vboNormals);
-    if (vao) glDeleteVertexArrays(1, &vao);
+    if (vao != 0) { // Only delete if valid ID
+        if (ebo != 0) glDeleteBuffers(1, &ebo);
+        if (vboPositions != 0) glDeleteBuffers(1, &vboPositions);
+        if (vboNormals != 0) glDeleteBuffers(1, &vboNormals);
+        glDeleteVertexArrays(1, &vao);
+    }
+    // Clear IDs regardless, making it idempotent
     vao = vboPositions = vboNormals = ebo = indexCount = 0;
   }
 };
@@ -80,7 +83,9 @@ class OpenGLRenderer {
   // --- Resource Management ---
   uint32_t GetSceneTextureId() const { return m_SceneColorTexture; }
   void SyncSceneObjects(const Scene& scene);
-  void ClearGpuResources();
+  
+  void ClearAllGpuResources();
+
   std::unordered_map<uint32_t, GpuMeshResources>& GetGpuResources() {
     return m_GpuResources;
   }

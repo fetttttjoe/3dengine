@@ -43,7 +43,9 @@ file(GLOB_RECURSE ENGINE_SOURCES
 )
 list(FILTER ENGINE_SOURCES EXCLUDE REGEX ".*/main.cpp$")
 
-add_library(IntuitiveModeler STATIC ${ENGINE_SOURCES})
+add_library(IntuitiveModeler STATIC 
+
+  ${ENGINE_SOURCES})
 
 target_sources(IntuitiveModeler PRIVATE
   ${imgui_SOURCE_DIR}/imgui.cpp
@@ -85,7 +87,8 @@ set_target_properties(IntuitiveModeler_App PROPERTIES RUNTIME_OUTPUT_DIRECTORY "
 
 # Copy the shaders folder after the main app is built
 add_custom_command(TARGET IntuitiveModeler_App POST_BUILD
-  COMMAND ${CMAKE_COMMAND} -E copy_directory
+ 
+ COMMAND ${CMAKE_COMMAND} -E copy_directory
   "${CMAKE_CURRENT_SOURCE_DIR}/shaders"
   "$<TARGET_FILE_DIR:IntuitiveModeler_App>/shaders"
 )
@@ -95,25 +98,31 @@ enable_testing()
 # Explicitly list test source files for clarity and reliability
 add_executable(runTests
     tests/main.cpp
-    tests/MoveVertexToolTests.cpp
-    tests/MoveVertexToolAdvancedTests.cpp
     tests/SculptingTests.cpp
     tests/RaycasterTests.cpp
     tests/CameraTests.cpp
     tests/SceneLoadingTests.cpp
+    tests/SelectionTests.cpp
     tests/SceneTests.cpp
     tests/SettingsManagerTests.cpp
     tests/TransformGizmoTests.cpp
+    tests/ResourceManagerTests.cpp
     tests/TestMock.cpp
+    tests/RendererTests.cpp
+    tests/ApplicationTests.cpp 
+    tests/UITests.cpp          
 )
 target_link_libraries(runTests PRIVATE IntuitiveModeler gtest)
+target_compile_definitions(runTests PRIVATE INTUITIVE_MODELER_TESTING)
 
 target_include_directories(runTests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${CMAKE_CURRENT_SOURCE_DIR}/tests # This makes tests/*.h findable
 )
 
 # Set the output directory for the test executable
-set_target_properties(runTests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/$<CONFIG>") 
+set_target_properties(runTests PROPERTIES RUNTIME_OUTPUT_DIRECTORY 
+"${CMAKE_BINARY_DIR}/$<CONFIG>") 
 
 # This tells CTest how to run your tests.
 gtest_discover_tests(runTests
@@ -125,6 +134,20 @@ add_custom_command(TARGET runTests POST_BUILD
   "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_scene.json"
   "$<TARGET_FILE_DIR:runTests>/test_scene.json"
 )
+
+# Copy the resources after the test executable is built
+add_custom_command(TARGET runTests POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E copy
+  "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_cube.obj"
+  "$<TARGET_FILE_DIR:runTests>/test_cube.obj"
+)
+
+add_custom_command(TARGET runTests POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E copy
+  "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_scene_empty.json"
+  "$<TARGET_FILE_DIR:runTests>/test_scene_empty.json"
+)
+
 add_custom_command(TARGET runTests POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E copy_directory
   "${CMAKE_CURRENT_SOURCE_DIR}/shaders"

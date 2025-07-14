@@ -41,18 +41,50 @@ TEST_F(SceneLoadingTest, LoadAndVerifyAllObjects) {
         scene->Load("test_scene.json");
 
         ASSERT_FALSE(scene->GetSceneObjects().empty()) << "No objects were loaded from test_scene.json. Make sure the file exists in the build directory.";
+        
+        // Verify the number of objects loaded
+        ASSERT_EQ(scene->GetSceneObjects().size(), 4);
 
-        // Sync the scene with the renderer.
+        // --- Verify Pyramid ---
+        ISceneObject* pyramid = scene->GetObjectByID(1);
+        ASSERT_NE(pyramid, nullptr);
+        EXPECT_EQ(pyramid->name, "Pyramid");
+        EXPECT_EQ(pyramid->GetTypeString(), ObjectTypes::Pyramid);
+        EXPECT_EQ(pyramid->GetPosition(), glm::vec3(-4.0f, 0.0f, 0.0f));
+        EXPECT_FLOAT_EQ(pyramid->GetPropertySet().GetValue<float>(PropertyNames::Width), 1.0f);
+
+        // --- Verify Sphere ---
+        ISceneObject* sphere = scene->GetObjectByID(2);
+        ASSERT_NE(sphere, nullptr);
+        EXPECT_EQ(sphere->name, "Sphere");
+        EXPECT_EQ(sphere->GetTypeString(), ObjectTypes::Sphere);
+        EXPECT_EQ(sphere->GetPosition(), glm::vec3(-2.0f, 0.5f, 0.0f));
+        EXPECT_FLOAT_EQ(sphere->GetPropertySet().GetValue<float>(PropertyNames::Radius), 1.0f);
+
+        // --- Verify Icosphere ---
+        ISceneObject* icosphere = scene->GetObjectByID(3);
+        ASSERT_NE(icosphere, nullptr);
+        EXPECT_EQ(icosphere->name, "Icosphere");
+        EXPECT_EQ(icosphere->GetTypeString(), ObjectTypes::Icosphere);
+        EXPECT_EQ(icosphere->GetPosition(), glm::vec3(0.0f, 0.5f, 0.0f));
+
+        // --- Verify Triangle ---
+        ISceneObject* triangle = scene->GetObjectByID(4);
+        ASSERT_NE(triangle, nullptr);
+        EXPECT_EQ(triangle->name, "Triangle");
+        EXPECT_EQ(triangle->GetTypeString(), ObjectTypes::Triangle);
+        EXPECT_EQ(triangle->GetPosition(), glm::vec3(2.0f, 0.0f, 0.0f));
+        
+        // Sync the scene with the renderer to ensure GPU resources are created.
         renderer->SyncSceneObjects(*scene);
 
+        // Final check: Draw all objects to catch any rendering-related errors
         glm::mat4 dummyMat(1.0f);
-
         for (const auto& object : scene->GetSceneObjects()) {
             ASSERT_NE(object, nullptr);
-            std::cout << "Verifying object: " << object->name << " (ID: " << object->id << ", Type: " << object->GetTypeString() << ")" << std::endl;
-            // The Draw call will now use the globally managed renderer.
             object->Draw(*renderer, dummyMat, dummyMat);
         }
+
     }
     catch (const nlohmann::json::exception& e) {
         FAIL() << "A JSON parsing error occurred during the test: " << e.what();

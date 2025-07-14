@@ -6,6 +6,8 @@
 #include "Core/PropertyNames.h"
 #include <cstdio>
 #include "Scene/Objects/Pyramid.h" 
+#include "Sculpting/SculptableMesh.h" // Include SculptableMesh for IEditableMesh
+#include "Core/SettingsManager.h" // Needed for default cloneOffset
 
 class MockSceneObject : public ISceneObject {
 public:
@@ -29,8 +31,11 @@ public:
     void SetEulerAngles(const glm::vec3&) override {}
     std::vector<GizmoHandleDef> GetGizmoHandleDefs() override { return {}; }
     void OnGizmoUpdate(const std::string&, float, const glm::vec3&) override {}
+    std::shared_ptr<Shader> GetShader() const override { return nullptr; } // Added missing override
+    bool IsUserCreatable() const override { return true; } // Added missing override
 
-    SculptableMesh* GetSculptableMesh() override { return nullptr; }
+    // Implement ISceneObject's mesh-related methods for the mock
+    IEditableMesh* GetEditableMesh() override { return nullptr; } // Mock does not have an editable mesh
     bool IsMeshDirty() const override { return false; }
     void SetMeshDirty(bool dirty) override {}
 
@@ -87,7 +92,8 @@ TEST_F(SceneTest, SelectObject) {
 
 TEST_F(SceneTest, DuplicateObject) {
     auto pyramid = factory.Create(std::string(ObjectTypes::Pyramid) + "_Mock");
-    pyramid->SetPosition({1, 2, 3});
+    pyramid->name = "MyObject"; // Set a base name for testing auto-naming
+    pyramid->SetPosition({1.0f, 2.0f, 3.0f}); // Ensure distinct initial position
     scene->AddObject(std::move(pyramid));
     scene->DuplicateObject(1);
     ASSERT_EQ(scene->GetSceneObjects().size(), 2);
@@ -96,7 +102,11 @@ TEST_F(SceneTest, DuplicateObject) {
     ASSERT_NE(clone, nullptr);
     EXPECT_EQ(clone->GetTypeString(), original->GetTypeString());
     EXPECT_NE(clone->id, original->id);
-    EXPECT_NE(clone->GetPosition(), original->GetPosition());
+    
+    // Default cloneOffset in AppSettings is {0.5f, 0.5f, 0.0f}
+    EXPECT_EQ(clone->GetPosition(), original->GetPosition() + SettingsManager::Get().cloneOffset);
+    // Corrected expectation based on the bug fix: it should use the original name
+    EXPECT_EQ(clone->name, "MyObject (1)"); 
 }
 
 TEST_F(SceneTest, SaveAndLoad) {
@@ -104,7 +114,7 @@ TEST_F(SceneTest, SaveAndLoad) {
     scene->AddObject(factory.Create(std::string(ObjectTypes::Pyramid) + "_Mock"));
     ISceneObject* obj = scene->GetObjectByID(1);
     obj->name = "MyPyramid";
-    obj->SetPosition({5, 5, 5});
+    obj->SetPosition({5.0f, 5.0f, 5.0f});
     scene->Save(tempFilename);
     scene->Clear();
 
@@ -119,7 +129,7 @@ TEST_F(SceneTest, SaveAndLoad) {
     ISceneObject* loadedObject = loadScene.GetObjectByID(1);
     ASSERT_NE(loadedObject, nullptr);
     EXPECT_EQ(loadedObject->name, "MyPyramid");
-    EXPECT_EQ(loadedObject->GetPosition(), glm::vec3(5, 5, 5));
+    EXPECT_EQ(loadedObject->GetPosition(), glm::vec3(5.0f, 5.0f, 5.0f));
     std::remove(tempFilename);
 }
 

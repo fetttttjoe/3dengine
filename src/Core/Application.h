@@ -1,12 +1,10 @@
 #pragma once
 
 #include <Interfaces.h>
-
 #include <glm/glm.hpp>
 #include <memory>
 #include <string>
 #include <vector>
-
 #include "Sculpting/ISculptTool.h"
 
 // Forward declarations
@@ -41,7 +39,7 @@ class Application {
   OpenGLRenderer* GetRenderer() const { return m_Renderer.get(); }
   Camera* GetCamera() const { return m_Camera.get(); }
   GLFWwindow* GetWindow() { return m_Window; }
-  SubObjectSelection* GetSelection() { return m_Selection.get(); }
+  SubObjectSelection* GetSelection() const { return m_Selection.get(); }
 
   // --- State Management ---
   void SelectObject(uint32_t id);
@@ -77,6 +75,13 @@ class Application {
 
   // --- Singleton Accessor ---
   static Application& Get();
+
+#if defined(INTUITIVE_MODELER_TESTING)
+  // This function is only visible to the test build
+  void ProcessPendingActions_ForTests() {
+    ProcessPendingActions();
+  }
+#endif
 
  private:
   void Initialize();
