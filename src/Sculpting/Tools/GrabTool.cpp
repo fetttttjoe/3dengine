@@ -3,7 +3,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/norm.hpp>
 
-#include "Core/MathHelpers.h"  // CORRECT HEADER
+#include "Core/MathHelpers.h"
 #include "Core/UI/BrushSettings.h"
 #include "Interfaces/IEditableMesh.h"
 
@@ -17,21 +17,18 @@ void GrabTool::Apply(IEditableMesh& mesh, const glm::vec3& hitPoint,
   float brushRadiusSq = settings.radius * settings.radius;
 
   glm::mat4 viewProj = projectionMatrix * viewMatrix;
-  // CORRECTED: Use MathHelpers instead of Camera
   glm::vec2 screenPos = MathHelpers::WorldToScreen(
       hitPoint, viewProj, viewportWidth, viewportHeight);
 
   glm::mat4 invViewProj = glm::inverse(viewProj);
-  // CORRECTED: Use MathHelpers instead of Camera
   glm::vec3 worldPosStart = MathHelpers::ScreenToWorldPoint(
       screenPos, screenPos.y, invViewProj, viewportWidth, viewportHeight);
-  // CORRECTED: Use MathHelpers instead of Camera
   glm::vec3 worldPosEnd = MathHelpers::ScreenToWorldPoint(
       screenPos + mouseDelta, screenPos.y, invViewProj, viewportWidth,
       viewportHeight);
 
   glm::vec3 worldDelta =
-      (worldPosEnd - worldPosStart) * settings.strength * 2.0f;
+      (worldPosEnd - worldPosStart) * settings.strength * 0.2f;
 
   auto& vertices = mesh.GetVertices();
   for (size_t i = 0; i < vertices.size(); ++i) {

@@ -195,3 +195,44 @@ bool SculptableMesh::WeldVertices(
   RecalculateNormals();
   return true;
 }
+
+bool SculptableMesh::BevelEdges(const std::unordered_set<std::pair<uint32_t, uint32_t>, PairHash>& edges, float amount) {
+    if (edges.empty()) return false;
+
+    std::vector<uint32_t> newIndices;
+    std::map<uint32_t, uint32_t> oldToNewVertexMap;
+
+    for (const auto& edge : edges) {
+        uint32_t v0_idx = edge.first;
+        uint32_t v1_idx = edge.second;
+
+        // For each vertex on the edge, create a new beveled vertex if one doesn't exist yet
+        if (oldToNewVertexMap.find(v0_idx) == oldToNewVertexMap.end()) {
+            glm::vec3 offset = m_Normals[v0_idx] * amount;
+            m_Vertices.push_back(m_Vertices[v0_idx] + offset);
+            oldToNewVertexMap[v0_idx] = m_Vertices.size() - 1;
+        }
+        if (oldToNewVertexMap.find(v1_idx) == oldToNewVertexMap.end()) {
+            glm::vec3 offset = m_Normals[v1_idx] * amount;
+            m_Vertices.push_back(m_Vertices[v1_idx] + offset);
+            oldToNewVertexMap[v1_idx] = m_Vertices.size() - 1;
+        }
+
+        uint32_t v0_new_idx = oldToNewVertexMap[v0_idx];
+        uint32_t v1_new_idx = oldToNewVertexMap[v1_idx];
+
+        // Create two new triangles to form the beveled face
+        newIndices.push_back(v0_idx);
+        newIndices.push_back(v1_idx);
+        newIndices.push_back(v1_new_idx);
+
+        newIndices.push_back(v0_idx);
+        newIndices.push_back(v1_new_idx);
+        newIndices.push_back(v0_new_idx);
+    }
+
+    // A simple implementation just adds new faces. A more complex one would replace existing ones.
+    m_Indices.insert(m_Indices.end(), newIndices.begin(), newIndices.end());
+    RecalculateNormals();
+    return true;
+}

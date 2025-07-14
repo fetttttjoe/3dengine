@@ -9,14 +9,13 @@ protected:
     SubObjectSelection selection;
     SculptableMesh mesh;
     
-    // Mock camera and viewport settings
     glm::mat4 viewMatrix;
     glm::mat4 projMatrix;
+    glm::vec3 cameraFwd;
     int viewportWidth = 800;
     int viewportHeight = 600;
 
     void SetUp() override {
-        // Create a simple triangle mesh
         std::vector<float> vertices = {
             0.0f, 1.0f, 0.0f,  // Vertex 0 (Top)
            -1.0f, -1.0f, 0.0f, // Vertex 1 (Left)
@@ -24,41 +23,41 @@ protected:
         };
         std::vector<unsigned int> indices = {0, 1, 2};
         mesh.Initialize(vertices, indices);
+        mesh.RecalculateNormals();
 
-        // Set up a simple orthographic camera looking at the triangle
         viewMatrix = glm::lookAt(glm::vec3(0, 0, 5), glm::vec3(0, 0, 0), glm::vec3(0, 1, 0));
         projMatrix = glm::ortho(-5.0f, 5.0f, -5.0f, 5.0f, 0.1f, 100.0f);
+        cameraFwd = glm::normalize(glm::vec3(0,0,0) - glm::vec3(0,0,5));
     }
 };
 
 TEST_F(SelectionTest, FindClosestVertex_SelectsCorrectVertex) {
-    // Arrange: Project the world position of the top vertex (Vertex 0) to screen space
     glm::vec3 topVertexWorldPos = mesh.GetVertices()[0];
-    glm::vec2 topVertexScreenPos = MathHelpers::WorldToScreen(
-        topVertexWorldPos, projMatrix * viewMatrix, viewportWidth, viewportHeight
-    );
+    glm::vec2 topVertexScreenPos = MathHelpers::WorldToScreen(topVertexWorldPos, projMatrix * viewMatrix, viewportWidth, viewportHeight);
 
-    // Act: "Click" exactly on the screen position of the top vertex
-    int closestIndex = selection.FindClosestVertex_ForTests(
-        mesh, glm::mat4(1.0f), topVertexScreenPos, viewMatrix, projMatrix,
-        viewportWidth, viewportHeight, 10.0f
-    );
+    int closestIndex = selection.FindClosestVertex_ForTests(mesh, glm::mat4(1.0f), topVertexScreenPos, viewMatrix, projMatrix, cameraFwd, viewportWidth, viewportHeight, 10.0f);
 
-    // Assert: The returned index should be 0
     EXPECT_EQ(closestIndex, 0);
 }
 
+TEST_F(SelectionTest, FindClosestEdge_SelectsCorrectEdge) {
+    // Arrange: Find the midpoint of the left edge (vertices 0 and 1) and project to screen
+    glm::vec3 v0 = mesh.GetVertices()[0];
+    glm::vec3 v1 = mesh.GetVertices()[1];
+    glm::vec3 edgeMidPointWorld = (v0 + v1) / 2.0f;
+    glm::vec2 edgeMidPointScreen = MathHelpers::WorldToScreen(edgeMidPointWorld, projMatrix * viewMatrix, viewportWidth, viewportHeight);
+
+    // Act: "Click" near the middle of the edge
+    std::pair<int, int> closestEdge = selection.FindClosestEdge_ForTests(mesh, glm::mat4(1.0f), edgeMidPointScreen, viewMatrix, projMatrix, cameraFwd, viewportWidth, viewportHeight, 10.0f);
+
+    // Assert: The returned edge should be {0, 1}
+    EXPECT_EQ(closestEdge.first, 0);
+    EXPECT_EQ(closestEdge.second, 1);
+}
+
 TEST_F(SelectionTest, FindClosestVertex_MissesWhenFarAway) {
-    // Arrange: Define a screen position that is far from any vertex
     glm::vec2 farAwayScreenPos(0.0f, 0.0f);
-
-    // Act: "Click" on the far away position
-    int closestIndex = selection.FindClosestVertex_ForTests(
-        mesh, glm::mat4(1.0f), farAwayScreenPos, viewMatrix, projMatrix,
-        viewportWidth, viewportHeight, 10.0f
-    );
-
-    // Assert: No vertex should be found
+    int closestIndex = selection.FindClosestVertex_ForTests(mesh, glm::mat4(1.0f), farAwayScreenPos, viewMatrix, projMatrix, cameraFwd, viewportWidth, viewportHeight, 10.0f);
     EXPECT_EQ(closestIndex, -1);
 }
 
@@ -74,7 +73,7 @@ TEST_F(SelectionTest, FindClosestVertex_SelectsWithTransform) {
     // Act: "Click" on the transformed vertex's screen position
     int closestIndex = selection.FindClosestVertex_ForTests(
         mesh, modelMatrix, rightVertexScreenPos, viewMatrix, projMatrix,
-        viewportWidth, viewportHeight, 10.0f
+        cameraFwd, viewportWidth, viewportHeight, 10.0f
     );
 
     // Assert: The correct vertex (index 2) should be found

@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "Interfaces/IEditableMesh.h"
+#include "Sculpting/SubObjectSelection.h" // For PairHash
 
 // Correctly inherit from the IEditableMesh interface
 class SculptableMesh : public IEditableMesh {
@@ -42,6 +43,8 @@ class SculptableMesh : public IEditableMesh {
                     float distance) override;
   bool WeldVertices(const std::unordered_set<uint32_t>& vertexIndices,
                     const glm::vec3& weldPoint) override;
+
+  bool BevelEdges(const std::unordered_set<std::pair<uint32_t, uint32_t>, PairHash>& edges, float amount) override;
 
   // --- Serialization ---
   void Serialize(nlohmann::json& outJson) const;

@@ -118,6 +118,103 @@ void Application::Initialize() {
   Log::Debug("Application::Initialize - Initialization complete.");
 }
 
+void Application::Run() {
+  while (!glfwWindowShouldClose(m_Window)) {
+    glfwPollEvents();
+    Update();
+    Render();
+    glfwSwapBuffers(m_Window);
+  }
+}
+
+void Application::Update() {
+  float now = static_cast<float>(glfwGetTime());
+  m_DeltaTime = now - m_LastFrame;
+  m_LastFrame = now;
+
+  ProcessPendingActions();
+  m_Scene->ProcessDeferredDeletions();
+
+  if (m_Scene->GetSelectedObject() == nullptr &&
+      m_TransformGizmo->GetTarget() != nullptr) {
+    m_TransformGizmo->SetTarget(nullptr);
+    RequestSceneRender();
+  }
+
+  m_Renderer->SyncSceneObjects(*m_Scene);
+
+  auto* vp = m_UI->GetView<ViewportPane>();
+  if (vp) {
+    glm::vec2 currentSize = vp->GetSize();
+    if (currentSize.x > 0 && currentSize.y > 0 &&
+        currentSize != m_LastViewportSize) {
+      m_Renderer->OnWindowResize((int)currentSize.x, (int)currentSize.y);
+      m_Camera->SetAspectRatio(currentSize.x / currentSize.y);
+      m_LastViewportSize = currentSize;
+      RequestSceneRender();
+    }
+    if (vp->IsHovered()) {
+      m_Camera->HandleInput(m_DeltaTime,
+                            [this]() { this->RequestSceneRender(); });
+    }
+  }
+
+  processGlobalKeyboardShortcuts();
+  processMouseActions();
+}
+
+void Application::Render() {
+  if (m_SceneRenderRequested) {
+    m_Renderer->BeginSceneFrame();
+    for (const auto& object : m_Scene->GetSceneObjects()) {
+      if (!object) continue;
+
+      bool isGhosted =
+          object->isSelected && (m_EditorMode == EditorMode::SUB_OBJECT ||
+                                 m_EditorMode == EditorMode::SCULPT);
+      if (isGhosted) {
+        m_Renderer->RenderObjectAsGhost(*object, *m_Camera,
+                                        glm::vec4(0.3f, 0.5f, 0.8f, 0.2f));
+      } else {
+        object->Draw(*m_Renderer, m_Camera->GetViewMatrix(),
+                     m_Camera->GetProjectionMatrix());
+      }
+    }
+
+    if (auto* sel = m_Scene->GetSelectedObject()) {
+      if (m_EditorMode == EditorMode::TRANSFORM) {
+        sel->DrawHighlight(m_Camera->GetViewMatrix(),
+                           m_Camera->GetProjectionMatrix());
+        m_TransformGizmo->Draw(*m_Renderer, *m_Camera);
+      } else if (m_EditorMode == EditorMode::SUB_OBJECT) {
+        if (auto* editableMesh = sel->GetEditableMesh()) {
+          m_Renderer->RenderSelectedFaces(*editableMesh,
+                                          m_Selection->GetSelectedFaces(),
+                                          sel->GetTransform(), *m_Camera);
+          m_Renderer->RenderSelectedEdges(*editableMesh,
+                                          m_Selection->GetSelectedEdges(),
+                                          sel->GetTransform(), *m_Camera);
+          m_Renderer->RenderVertexHighlights(*editableMesh,
+                                             m_Selection->GetSelectedVertices(),
+                                             sel->GetTransform(), *m_Camera);
+          m_Renderer->RenderHighlightedPath(*editableMesh, m_Selection->GetHighlightedPath(), sel->GetTransform(), *m_Camera);
+        }
+      }
+    }
+    m_Renderer->EndSceneFrame();
+    m_SceneRenderRequested = false;
+  }
+
+  m_UI->BeginFrame();
+  m_UI->Draw();
+  if (m_ShowMetricsWindow) {
+    ImGui::ShowMetricsWindow(&m_ShowMetricsWindow);
+  }
+
+  m_Renderer->BeginFrame();
+  m_UI->EndFrame();
+}
+
 void Application::RegisterObjectTypes() {
   m_ObjectFactory->Register(std::string(ObjectTypes::Triangle),
                             []() { return std::make_unique<Triangle>(); });
@@ -132,88 +229,6 @@ void Application::RegisterObjectTypes() {
                             []() { return std::make_unique<Grid>(); });
   m_ObjectFactory->Register(std::string(ObjectTypes::CustomMesh),
                             []() { return std::make_unique<CustomMesh>(); });
-}
-void Application::Run() {
-  while (!glfwWindowShouldClose(m_Window)) {
-    glfwPollEvents();
-    float now = static_cast<float>(glfwGetTime());
-    m_DeltaTime = now - m_LastFrame;
-    m_LastFrame = now;
-
-    ProcessPendingActions();
-    m_Scene->ProcessDeferredDeletions();
-
-    if (m_Scene->GetSelectedObject() == nullptr &&
-        m_TransformGizmo->GetTarget() != nullptr) {
-      m_TransformGizmo->SetTarget(nullptr);
-    }
-
-    m_Renderer->SyncSceneObjects(*m_Scene);
-    m_UI->BeginFrame();
-    m_UI->Draw();
-
-    auto* vp = m_UI->GetView<ViewportPane>();
-    if (vp) {
-      glm::vec2 currentSize = vp->GetSize();
-      if (currentSize.x > 0 && currentSize.y > 0 &&
-          currentSize != m_LastViewportSize) {
-        m_Renderer->OnWindowResize((int)currentSize.x, (int)currentSize.y);
-        m_Camera->SetAspectRatio(currentSize.x / currentSize.y);
-        m_LastViewportSize = currentSize;
-        RequestSceneRender();
-      }
-
-      // CORRECT: This is the robust way to handle viewport input.
-      // We only pass input to the camera if the viewport is hovered.
-      if (vp->IsHovered()) {
-        m_Camera->HandleInput(m_DeltaTime,
-                              [this]() { this->RequestSceneRender(); });
-      }
-    }
-
-    processGlobalKeyboardShortcuts();
-    processMouseActions();
-
-    if (m_SceneRenderRequested) {
-      m_Renderer->BeginSceneFrame();
-
-      for (const auto& object : m_Scene->GetSceneObjects()) {
-        if (object) {
-          object->Draw(*m_Renderer, m_Camera->GetViewMatrix(),
-                       m_Camera->GetProjectionMatrix());
-        }
-      }
-
-      if (auto* sel = m_Scene->GetSelectedObject()) {
-        if (m_EditorMode == EditorMode::TRANSFORM) {
-          sel->DrawHighlight(m_Camera->GetViewMatrix(),
-                             m_Camera->GetProjectionMatrix());
-          m_TransformGizmo->Draw(*m_Renderer, *m_Camera);
-        }
-
-        if (m_EditorMode == EditorMode::SUB_OBJECT) {
-          if (auto* editableMesh = sel->GetEditableMesh()) {
-            m_Renderer->RenderVertexHighlights(
-                *editableMesh, m_Selection->GetSelectedVertices(),
-                sel->GetTransform(), *m_Camera);
-            m_Renderer->RenderSelectedFaces(*editableMesh,
-                                            m_Selection->GetSelectedFaces(),
-                                            sel->GetTransform(), *m_Camera);
-          }
-        }
-      }
-
-      m_Renderer->EndSceneFrame();
-      m_SceneRenderRequested = false;
-    }
-
-    m_Renderer->BeginFrame();
-    if (m_ShowMetricsWindow) {
-      ImGui::ShowMetricsWindow(&m_ShowMetricsWindow);
-    }
-    m_UI->EndFrame();
-    m_Renderer->EndFrame();
-  }
 }
 
 void Application::OnSceneLoaded() {
@@ -256,9 +271,10 @@ void Application::SelectObject(uint32_t id) {
 void Application::SetEditorMode(EditorMode newMode,
                                 SculptMode::Mode newSculptMode,
                                 SubObjectMode newSubObjectMode) {
-  Log::Debug("Application::SetEditorMode called. newMode: ", static_cast<int>(newMode),
-             ", newSculptMode: ", static_cast<int>(newSculptMode),
-             ", newSubObjectMode: ", static_cast<int>(newSubObjectMode));
+  Log::Debug(
+      "Application::SetEditorMode called. newMode: ", static_cast<int>(newMode),
+      ", newSculptMode: ", static_cast<int>(newSculptMode),
+      ", newSubObjectMode: ", static_cast<int>(newSubObjectMode));
 
   if (m_EditorMode == newMode && m_SculptMode == newSculptMode &&
       m_SubObjectMode == newSubObjectMode)
@@ -324,6 +340,11 @@ void Application::RequestMoveSelection(float distance) {
   m_MoveSelectionDistance = distance;
 }
 
+void Application::RequestBevelEdge(float amount) {
+  m_BevelRequested = true;
+  m_BevelAmount = amount;
+}
+
 void Application::ProcessPendingActions() {
   if (!m_RequestedCreationTypeNames.empty()) {
     for (const auto& typeName : m_RequestedCreationTypeNames) {
@@ -356,6 +377,16 @@ void Application::ProcessPendingActions() {
     m_ExtrudeRequested = false;
   }
 
+  if (m_BevelRequested) {
+    if (auto* sel = m_Scene->GetSelectedObject()) {
+      if (auto* mesh = sel->GetEditableMesh()) {
+        m_MeshEditor->BevelEdges(*mesh, *m_Selection, m_BevelAmount);
+        sel->SetMeshDirty(true);
+      }
+    }
+    m_BevelRequested = false;
+  }
+
   if (m_WeldRequested) {
     if (auto* sel = m_Scene->GetSelectedObject()) {
       if (auto* mesh = sel->GetEditableMesh()) {
@@ -365,6 +396,7 @@ void Application::ProcessPendingActions() {
     }
     m_WeldRequested = false;
   }
+
   if (m_MoveSelectionRequested) {
     if (auto* sel = m_Scene->GetSelectedObject()) {
       if (auto* mesh = sel->GetEditableMesh()) {
@@ -398,24 +430,28 @@ void Application::processGlobalKeyboardShortcuts() {
 void Application::processMouseActions() {
   auto* vp = m_UI->GetView<ViewportPane>();
   if (!vp || !vp->IsHovered()) {
-    if (m_IsDraggingGizmo) {
-      m_IsDraggingGizmo = false;
-      m_TransformGizmo->SetActiveHandle(0);
-    }
-    if (m_IsSculpting) {
-      m_IsSculpting = false;
+    m_IsDraggingGizmo = false;
+    m_TransformGizmo->SetActiveHandle(0);
+    m_DraggedObject = nullptr;
+    if (m_Selection->IsDragging()) {
+      if (auto* sel = m_Scene->GetSelectedObject()) {
+        if (auto* mesh = sel->GetEditableMesh()) {
+          m_Selection->OnMouseRelease(*mesh);
+        }
+      }
     }
     return;
   }
 
+  bool isShiftPressed = ImGui::GetIO().KeyShift;
+
   if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
     const auto& vb = vp->GetBounds();
     ImVec2 absMousePosImGui = ImGui::GetMousePos();
-    glm::vec2 mouseScreenPosRelToViewport = MathHelpers::ToGlm(
-        {absMousePosImGui.x - vb[0].x, absMousePosImGui.y - vb[0].y});
-    int mx = static_cast<int>(mouseScreenPosRelToViewport.x);
-    int my = static_cast<int>(mouseScreenPosRelToViewport.y);
-    bool isShiftPressed = ImGui::GetIO().KeyShift;
+    glm::vec2 mousePos =
+        MathHelpers::ToGlm({absMousePosImGui.x - vb[0].x, absMousePosImGui.y - vb[0].y});
+    int mx = static_cast<int>(mousePos.x);
+    int my = static_cast<int>(mousePos.y);
 
     if (m_EditorMode == EditorMode::TRANSFORM) {
       uint32_t gizmoID =
@@ -427,20 +463,23 @@ void Application::processMouseActions() {
         uint32_t objectID =
             m_Renderer->ProcessPicking(mx, my, *m_Scene, *m_Camera);
         SelectObject(objectID);
+        m_DraggedObject = m_Scene->GetObjectByID(objectID);
+        if (m_DraggedObject) {
+            glm::mat4 viewProj = m_Camera->GetProjectionMatrix() * m_Camera->GetViewMatrix();
+            glm::vec4 clipPos = viewProj * glm::vec4(m_DraggedObject->GetPosition(), 1.0f);
+            m_DragNDCDepth = (clipPos.w != 0.0f) ? (clipPos.z / clipPos.w) : 0.0f;
+        }
       }
     } else if (m_EditorMode == EditorMode::SUB_OBJECT) {
       auto* sel = m_Scene->GetSelectedObject();
       if (sel && sel->GetEditableMesh()) {
         glm::vec3 ray_origin = m_Camera->GetPosition();
         glm::vec3 ray_direction = m_Camera->ScreenToWorldRay(
-            mouseScreenPosRelToViewport, (int)vp->GetSize().x,
-            (int)vp->GetSize().y);
-        m_Selection->OnMouseDown(
-            *sel->GetEditableMesh(), ray_origin, ray_direction,
-            sel->GetTransform(), mouseScreenPosRelToViewport,
-            m_Camera->GetViewMatrix(), m_Camera->GetProjectionMatrix(),
-            (int)vp->GetSize().x, (int)vp->GetSize().y, isShiftPressed,
-            m_SubObjectMode);
+            mousePos, (int)vp->GetSize().x, (int)vp->GetSize().y);
+        m_Selection->OnMouseDown(*sel->GetEditableMesh(), *m_Camera,
+                                 sel->GetTransform(), mousePos,
+                                 (int)vp->GetSize().x, (int)vp->GetSize().y,
+                                 isShiftPressed, m_SubObjectMode);
         RequestSceneRender();
       }
     } else if (m_EditorMode == EditorMode::SCULPT) {
@@ -449,18 +488,12 @@ void Application::processMouseActions() {
     }
   }
 
-  if (ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
-    if (m_IsSculpting) {
-      processSculpting();
-    }
-  }
-
   if (ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
     m_IsDraggingGizmo = false;
     m_TransformGizmo->SetActiveHandle(0);
     m_IsSculpting = false;
-
-    if (m_EditorMode == EditorMode::SUB_OBJECT) {
+    m_DraggedObject = nullptr;
+    if (m_EditorMode == EditorMode::SUB_OBJECT && m_Selection->IsDragging()) {
       auto* sel = m_Scene->GetSelectedObject();
       if (sel && sel->GetEditableMesh()) {
         m_Selection->OnMouseRelease(*sel->GetEditableMesh());
@@ -542,18 +575,26 @@ void Application::cursor_position_callback(GLFWwindow* window, double xpos,
           *app->m_Camera, MathHelpers::ToGlm(ImGui::GetIO().MouseDelta), true,
           app->m_LastViewportSize.x, app->m_LastViewportSize.y);
       app->RequestSceneRender();
-    } else if (app->m_EditorMode == EditorMode::SUB_OBJECT) {
-      auto* sel = app->m_Scene->GetSelectedObject();
-      if (sel && sel->GetEditableMesh() && app->m_Selection->IsDragging()) {
-        app->m_Selection->OnMouseDrag(
-            MathHelpers::ToGlm(ImGui::GetIO().MouseDelta));
-        app->m_Selection->ApplyDrag(
-            *sel->GetEditableMesh(), app->m_Camera->GetViewMatrix(),
-            app->m_Camera->GetProjectionMatrix(),
-            (int)app->m_LastViewportSize.x, (int)app->m_LastViewportSize.y);
-        sel->SetMeshDirty(true);
+    } else if (app->m_DraggedObject) {
+      const auto& vb = app->m_UI->GetView<ViewportPane>()->GetBounds();
+      ImVec2 abs = ImGui::GetMousePos();
+      ImVec2 rel = {abs.x - vb[0].x, abs.y - vb[0].y};
+      glm::mat4 invViewProj = glm::inverse(app->m_Camera->GetProjectionMatrix() * app->m_Camera->GetViewMatrix());
+      glm::vec3 worldPos = MathHelpers::ScreenToWorldPoint({rel.x, rel.y}, app->m_DragNDCDepth, invViewProj, app->m_LastViewportSize.x, app->m_LastViewportSize.y);
+      app->m_DraggedObject->SetPosition(worldPos);
+      app->RequestSceneRender();
+
+    } else if (app->m_EditorMode == EditorMode::SUB_OBJECT && app->m_Selection->IsDragging()) {
+       auto* sel = app->m_Scene->GetSelectedObject();
+       if (sel && sel->GetEditableMesh()) {
+           app->m_Selection->OnMouseDrag(MathHelpers::ToGlm(ImGui::GetIO().MouseDelta)); // Accumulate delta
+           app->m_Selection->ApplyDrag( // Apply the accumulated delta
+               *sel->GetEditableMesh(), app->m_Camera->GetViewMatrix(),
+               app->m_Camera->GetProjectionMatrix(),
+               (int)app->m_LastViewportSize.x, (int)app->m_LastViewportSize.y);
+       }
+        app->m_Scene->GetSelectedObject()->SetMeshDirty(true);
         app->RequestSceneRender();
-      }
     }
   }
 }

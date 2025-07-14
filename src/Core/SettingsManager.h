@@ -6,7 +6,7 @@
 #include <vector>
 
 /** Supported UI widget types for auto-generation. */
-enum class SettingType { Float3, Float, Int };
+enum class SettingType { Float3, Float, Int, Color4 };
 
 /** Descriptor for one setting. */
 struct SettingDescriptor {
@@ -30,6 +30,12 @@ struct AppSettings {
   int gridSize = 80;
   int gridDivisions = 80;
   float cameraSpeed = 5.0f;
+
+  // --- Selection Colors ---
+  glm::vec4 vertexHighlightColor = {1.0f, 0.5f, 0.0f, 1.0f};
+  glm::vec4 edgeHighlightColor = {1.0f, 0.5f, 0.0f, 1.0f};
+  glm::vec4 pathHighlightColor = {0.0f, 0.8f, 0.8f, 1.0f};
+  glm::vec4 selectedFacesColor = {0.0f, 0.5f, 1.0f, 0.5f};
 };
 
 class SettingsManager {

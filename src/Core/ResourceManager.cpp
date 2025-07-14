@@ -24,7 +24,6 @@ void ResourceManager::Shutdown() {
 std::shared_ptr<Shader> ResourceManager::LoadShader(
     const std::string& name, const std::string& vShaderFile,
     const std::string& fShaderFile) {
-  // CORRECTED: Use the provided 'name' as the key for caching.
   if (s_Shaders.count(name)) {
     return s_Shaders[name];
   }

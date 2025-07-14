@@ -1,6 +1,8 @@
 #include "Sculpting/MeshEditor.h"
 
 #include "Core/Log.h"
+#include "Interfaces/IEditableMesh.h"
+#include "Sculpting/SubObjectSelection.h"
 
 void MeshEditor::Extrude(IEditableMesh& mesh,
                          const SubObjectSelection& selection, float distance) {
@@ -19,7 +21,13 @@ void MeshEditor::Weld(IEditableMesh& mesh, SubObjectSelection& selection) {
   weldPoint /= selectedVertices.size();
 
   mesh.WeldVertices(selectedVertices, weldPoint);
-  selection.Clear();  // Clear selection after welding
+  selection.Clear();
+}
+
+void MeshEditor::BevelEdges(IEditableMesh& mesh,
+                            const SubObjectSelection& selection, float amount) {
+    if (selection.GetSelectedEdges().empty()) return;
+    mesh.BevelEdges(selection.GetSelectedEdges(), amount);
 }
 
 void MeshEditor::MoveAlongNormal(IEditableMesh& mesh,

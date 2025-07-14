@@ -6,6 +6,9 @@
 #include <memory>
 #include <unordered_map>
 #include <unordered_set>
+#include <vector>
+
+#include "Sculpting/SubObjectSelection.h"
 
 class Scene;
 class Camera;
@@ -24,13 +27,12 @@ struct GpuMeshResources {
   GLsizei indexCount = 0;
 
   void Release() {
-    if (vao != 0) { // Only delete if valid ID
-        if (ebo != 0) glDeleteBuffers(1, &ebo);
-        if (vboPositions != 0) glDeleteBuffers(1, &vboPositions);
-        if (vboNormals != 0) glDeleteBuffers(1, &vboNormals);
-        glDeleteVertexArrays(1, &vao);
+    if (vao != 0) {
+      if (ebo != 0) glDeleteBuffers(1, &ebo);
+      if (vboPositions != 0) glDeleteBuffers(1, &vboPositions);
+      if (vboNormals != 0) glDeleteBuffers(1, &vboNormals);
+      glDeleteVertexArrays(1, &vao);
     }
-    // Clear IDs regardless, making it idempotent
     vao = vboPositions = vboNormals = ebo = indexCount = 0;
   }
 };
@@ -42,7 +44,6 @@ class OpenGLRenderer {
 
   bool Initialize(void* windowHandle);
   void Shutdown();
-
   void OnWindowResize(int width, int height);
 
   // --- Frame Lifecycle ---
@@ -61,12 +62,23 @@ class OpenGLRenderer {
   // --- Specialized Rendering Methods ---
   void RenderGizmo(const TransformGizmo& gizmo, const Camera& camera);
   void RenderGrid(const Grid& grid, const Camera& camera);
+  void RenderHighlightedPath(const IEditableMesh& mesh,
+                           const std::vector<std::pair<uint32_t, uint32_t>>& path,
+                           const glm::mat4& modelMatrix, const Camera& camera);
 
   // --- Sub-Object Rendering ---
   void RenderVertexHighlights(
       const IEditableMesh& mesh,
       const std::unordered_set<uint32_t>& selectedVertexIndices,
       const glm::mat4& modelMatrix, const Camera& camera);
+  void RenderObjectAsGhost(const ISceneObject& object, const Camera& camera,
+                           const glm::vec4& color);
+  void RenderSelectedEdges(
+      const IEditableMesh& mesh,
+      const std::unordered_set<std::pair<uint32_t, uint32_t>, PairHash>&
+          selectedEdges,
+      const glm::mat4& modelMatrix, const Camera& camera);
+
   void RenderSelectedFaces(const IEditableMesh& mesh,
                            const std::unordered_set<uint32_t>& selectedFaces,
                            const glm::mat4& modelMatrix, const Camera& camera);
@@ -83,7 +95,7 @@ class OpenGLRenderer {
   // --- Resource Management ---
   uint32_t GetSceneTextureId() const { return m_SceneColorTexture; }
   void SyncSceneObjects(const Scene& scene);
-  
+
   void ClearAllGpuResources();
 
   std::unordered_map<uint32_t, GpuMeshResources>& GetGpuResources() {
@@ -109,6 +121,7 @@ class OpenGLRenderer {
   // Shaders
   std::shared_ptr<Shader> m_PickingShader;
   std::shared_ptr<Shader> m_HighlightShader;
+  std::shared_ptr<Shader> m_UnlitShader;
   std::shared_ptr<Shader> m_GizmoShader;
   std::shared_ptr<Shader> m_AnchorShader;
   std::shared_ptr<Shader> m_GridShader;
@@ -116,6 +129,7 @@ class OpenGLRenderer {
 
   // Mesh Data & GPU Buffers
   std::unordered_map<uint32_t, GpuMeshResources> m_GpuResources;
+  GLuint m_SelectedEdgesVAO = 0, m_SelectedEdgesVBO = 0;
 
   // Gizmo Resources
   GLuint m_GizmoVAO = 0, m_GizmoVBO = 0, m_GizmoEBO = 0;
@@ -130,4 +144,6 @@ class OpenGLRenderer {
 
   // Sub-object selection resources
   GLuint m_SelectedFacesVAO = 0, m_SelectedFacesVBO = 0;
+  GLuint m_SelectedVerticesVAO = 0, m_SelectedVerticesVBO = 0;
+  GLuint m_HighlightedPathVAO = 0, m_HighlightedPathVBO = 0;
 };

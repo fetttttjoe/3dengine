@@ -18,7 +18,7 @@
 #include "Scene/TransformGizmo.h"
 #include "Shader.h"
 #include "imgui_impl_opengl3.h"
-
+#include "Core/SettingsManager.h"
 const char* GIZMO_VERTEX_SHADER_SRC = R"glsl(
 #version 330 core
 layout (location = 0) in vec3 aPos;
@@ -48,7 +48,7 @@ bool OpenGLRenderer::Initialize(void* windowHandle) {
 
   glEnable(GL_DEPTH_TEST);
   glEnable(GL_BLEND);
-  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); 
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
   m_PickingShader = ResourceManager::LoadShader(
       "picking", "shaders/picking.vert", "shaders/picking.frag");
@@ -62,6 +62,8 @@ bool OpenGLRenderer::Initialize(void* windowHandle) {
       "grid_shader", "shaders/default.vert", "shaders/default.frag");
   m_LitShader = ResourceManager::LoadShader("lit_shader", "shaders/lit.vert",
                                             "shaders/lit.frag");
+  m_UnlitShader = ResourceManager::LoadShader("unlit", "shaders/default.vert",
+                                              "shaders/unlit.frag");
 
   glfwGetWindowSize(m_Window, &m_Width, &m_Height);
   createFramebuffers();
@@ -74,19 +76,38 @@ bool OpenGLRenderer::Initialize(void* windowHandle) {
   glBindBuffer(GL_ARRAY_BUFFER, m_SelectedFacesVBO);
   glEnableVertexAttribArray(0);
   glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), (void*)0);
+
+  glGenVertexArrays(1, &m_SelectedEdgesVAO);
+  glGenBuffers(1, &m_SelectedEdgesVBO);
+  glBindVertexArray(m_SelectedEdgesVAO);
+  glBindBuffer(GL_ARRAY_BUFFER, m_SelectedEdgesVBO);
+  glEnableVertexAttribArray(0);
+  glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), (void*)0);
+
+  glGenVertexArrays(1, &m_SelectedVerticesVAO);
+  glGenBuffers(1, &m_SelectedVerticesVBO);
+  glBindVertexArray(m_SelectedVerticesVAO);
+  glBindBuffer(GL_ARRAY_BUFFER, m_SelectedVerticesVBO);
+  glEnableVertexAttribArray(0);
+  glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), (void*)0);
+
+  glGenVertexArrays(1, &m_HighlightedPathVAO);
+  glGenBuffers(1, &m_HighlightedPathVBO);
+  glBindVertexArray(m_HighlightedPathVAO);
+  glBindBuffer(GL_ARRAY_BUFFER, m_HighlightedPathVBO);
+  glEnableVertexAttribArray(0);
+  glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), (void*)0);
+
   glBindVertexArray(0);
 
   Log::Debug("OpenGLRenderer Initialized successfully.");
   return true;
 }
 
-
 void OpenGLRenderer::SyncSceneObjects(const Scene& scene) {
   for (auto it = m_GpuResources.begin(); it != m_GpuResources.end();) {
     if (scene.GetObjectByID(it->first) == nullptr) {
-      // Object is removed from scene, so release its GPU resources.
-      // GpuMeshResources::Release() is idempotent and handles glDelete*.
-      it->second.Release(); 
+      it->second.Release();
       it = m_GpuResources.erase(it);
     } else {
       ++it;
@@ -153,20 +174,18 @@ void OpenGLRenderer::cleanupFramebuffers() {
 }
 
 void OpenGLRenderer::ClearAllGpuResources() {
-    for (auto& pair : m_GpuResources) {
-        pair.second.Release(); // Explicitly call Release() for each GpuMeshResources struct
-    }
-    m_GpuResources.clear();
+  for (auto& pair : m_GpuResources) {
+    pair.second.Release();
+  }
+  m_GpuResources.clear();
 }
 
 void OpenGLRenderer::Shutdown() {
   Log::Debug("OpenGLRenderer shutdown.");
   cleanupFramebuffers();
 
-  // Explicitly clear all GPU resources, ensuring their GL IDs are deleted.
-  ClearAllGpuResources(); 
+  ClearAllGpuResources();
 
-  // Delete remaining global GL objects managed directly by OpenGLRenderer
   if (m_GizmoVAO != 0) glDeleteVertexArrays(1, &m_GizmoVAO);
   if (m_GizmoVBO != 0) glDeleteBuffers(1, &m_GizmoVBO);
   if (m_GizmoEBO != 0) glDeleteBuffers(1, &m_GizmoEBO);
@@ -184,9 +203,16 @@ void OpenGLRenderer::Shutdown() {
   if (m_SelectedFacesVAO != 0) glDeleteVertexArrays(1, &m_SelectedFacesVAO);
   if (m_SelectedFacesVBO != 0) glDeleteBuffers(1, &m_SelectedFacesVBO);
   m_SelectedFacesVAO = m_SelectedFacesVBO = 0;
-
-  // Shaders are managed by ResourceManager's static map and cleaned up globally
-  // when ResourceManager::Shutdown() is called, which happens in Application's destructor.
+  if (m_SelectedEdgesVAO != 0) glDeleteVertexArrays(1, &m_SelectedEdgesVAO);
+  if (m_SelectedEdgesVBO != 0) glDeleteBuffers(1, &m_SelectedEdgesVBO);
+  m_SelectedEdgesVAO = m_SelectedEdgesVBO = 0;
+  if (m_SelectedVerticesVAO != 0)
+    glDeleteVertexArrays(1, &m_SelectedVerticesVAO);
+  if (m_SelectedVerticesVBO != 0) glDeleteBuffers(1, &m_SelectedVerticesVBO);
+  m_SelectedVerticesVAO = m_SelectedVerticesVBO = 0;
+  if (m_HighlightedPathVAO != 0) glDeleteVertexArrays(1, &m_HighlightedPathVAO);
+  if (m_HighlightedPathVBO != 0) glDeleteBuffers(1, &m_HighlightedPathVBO);
+  m_HighlightedPathVAO = m_HighlightedPathVBO = 0;
 }
 
 void OpenGLRenderer::RenderSelectedFaces(
@@ -210,7 +236,7 @@ void OpenGLRenderer::RenderSelectedFaces(
   m_LitShader->SetUniformMat4f("u_Model", modelMatrix);
   m_LitShader->SetUniformMat4f("u_View", camera.GetViewMatrix());
   m_LitShader->SetUniformMat4f("u_Projection", camera.GetProjectionMatrix());
-  m_LitShader->SetUniformVec4("u_Color", glm::vec4(0.0f, 0.5f, 1.0f, 0.5f));
+  m_LitShader->SetUniformVec4("u_Color", SettingsManager::Get().selectedFacesColor);
   glDisable(GL_DEPTH_TEST);
   glEnable(GL_BLEND);
   glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -224,34 +250,152 @@ void OpenGLRenderer::RenderSelectedFaces(
   glEnable(GL_DEPTH_TEST);
 }
 
+void OpenGLRenderer::RenderObjectAsGhost(const ISceneObject& object,
+                                         const Camera& camera,
+                                         const glm::vec4& color) {
+  auto it = m_GpuResources.find(object.id);
+  if (it == m_GpuResources.end()) return;
+  const GpuMeshResources& res = it->second;
+  if (res.vao == 0 || res.indexCount == 0) return;
+
+  m_UnlitShader->Bind();
+  m_UnlitShader->SetUniformMat4f("u_Model", object.GetTransform());
+  m_UnlitShader->SetUniformMat4f("u_View", camera.GetViewMatrix());
+  m_UnlitShader->SetUniformMat4f("u_Projection", camera.GetProjectionMatrix());
+  m_UnlitShader->SetUniformVec4("u_Color", color);
+
+  glEnable(GL_BLEND);
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+  glDepthMask(GL_FALSE);
+
+  glBindVertexArray(res.vao);
+  glDrawElements(GL_TRIANGLES, res.indexCount, GL_UNSIGNED_INT, nullptr);
+
+  glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+  glLineWidth(1.0f);
+  m_UnlitShader->SetUniformVec4(
+      "u_Color", glm::vec4(color.r, color.g, color.b, color.a * 1.5f));
+  glDrawElements(GL_TRIANGLES, res.indexCount, GL_UNSIGNED_INT, nullptr);
+  glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+
+  glDepthMask(GL_TRUE);
+  glDisable(GL_BLEND);
+  glBindVertexArray(0);
+}
+
 void OpenGLRenderer::RenderVertexHighlights(
     const IEditableMesh& mesh,
     const std::unordered_set<uint32_t>& selectedVertexIndices,
     const glm::mat4& modelMatrix, const Camera& camera) {
-  if (selectedVertexIndices.empty() || !m_AnchorShader || m_AnchorVAO == 0)
-    return;
+  if (selectedVertexIndices.empty() || !m_LitShader) return;
+
+  glPointSize(10.0f);
   glDisable(GL_DEPTH_TEST);
-  m_AnchorShader->Bind();
-  m_AnchorShader->SetUniformMat4f("u_View", camera.GetViewMatrix());
-  m_AnchorShader->SetUniformMat4f("u_Projection", camera.GetProjectionMatrix());
-  glBindVertexArray(m_AnchorVAO);
+  m_LitShader->Bind();
+  m_LitShader->SetUniformMat4f("u_Model", modelMatrix);
+  m_LitShader->SetUniformMat4f("u_View", camera.GetViewMatrix());
+  m_LitShader->SetUniformMat4f("u_Projection", camera.GetProjectionMatrix());
+  m_LitShader->SetUniformVec4("u_Color", SettingsManager::Get().vertexHighlightColor);
+
+  std::vector<glm::vec3> points;
   const auto& vertices = mesh.GetVertices();
-  for (uint32_t vertexIndex : selectedVertexIndices) {
-    if (vertexIndex < vertices.size()) {
-      glm::vec3 vertexWorldPos =
-          glm::vec3(modelMatrix * glm::vec4(vertices[vertexIndex], 1.0f));
-      m_AnchorShader->SetUniformVec4("u_Color",
-                                     glm::vec4(1.0f, 1.0f, 0.0f, 1.0f));
-      glm::mat4 model = glm::translate(glm::mat4(1.0f), vertexWorldPos);
-      float distance = glm::length(camera.GetPosition() - vertexWorldPos);
-      float viz_scale = distance * 0.01f;
-      model = glm::scale(model, glm::vec3(viz_scale));
-      m_AnchorShader->SetUniformMat4f("u_Model", model);
-      glDrawElements(GL_TRIANGLES, m_AnchorIndexCount, GL_UNSIGNED_INT,
-                     nullptr);
+  for (uint32_t index : selectedVertexIndices) {
+    if (index < vertices.size()) {
+      points.push_back(vertices[index]);
     }
   }
+
+  if (points.empty()) {
+    glEnable(GL_DEPTH_TEST);
+    return;
+  }
+
+  glBindVertexArray(m_SelectedVerticesVAO);
+  glBindBuffer(GL_ARRAY_BUFFER, m_SelectedVerticesVBO);
+  glBufferData(GL_ARRAY_BUFFER, points.size() * sizeof(glm::vec3),
+               points.data(), GL_DYNAMIC_DRAW);
+  glDrawArrays(GL_POINTS, 0, static_cast<GLsizei>(points.size()));
   glBindVertexArray(0);
+  glPointSize(1.0f);
+  glEnable(GL_DEPTH_TEST);
+}
+
+void OpenGLRenderer::RenderSelectedEdges(
+    const IEditableMesh& mesh,
+    const std::unordered_set<std::pair<uint32_t, uint32_t>, PairHash>&
+        selectedEdges,
+    const glm::mat4& modelMatrix, const Camera& camera) {
+  if (selectedEdges.empty() || !m_LitShader) return;
+
+  glLineWidth(4.0f);
+  glDisable(GL_DEPTH_TEST);
+  m_LitShader->Bind();
+  m_LitShader->SetUniformMat4f("u_Model", modelMatrix);
+  m_LitShader->SetUniformMat4f("u_View", camera.GetViewMatrix());
+  m_LitShader->SetUniformMat4f("u_Projection", camera.GetProjectionMatrix());
+  m_LitShader->SetUniformVec4("u_Color", SettingsManager::Get().edgeHighlightColor);
+
+  std::vector<glm::vec3> lines;
+  const auto& vertices = mesh.GetVertices();
+  for (const auto& edge : selectedEdges) {
+    if (edge.first < vertices.size() && edge.second < vertices.size()) {
+      lines.push_back(vertices[edge.first]);
+      lines.push_back(vertices[edge.second]);
+    }
+  }
+
+  if (lines.empty()) {
+    glEnable(GL_DEPTH_TEST);
+    glLineWidth(1.0f);
+    return;
+  }
+
+  glBindVertexArray(m_SelectedEdgesVAO);
+  glBindBuffer(GL_ARRAY_BUFFER, m_SelectedEdgesVBO);
+  glBufferData(GL_ARRAY_BUFFER, lines.size() * sizeof(glm::vec3), lines.data(),
+               GL_DYNAMIC_DRAW);
+  glDrawArrays(GL_LINES, 0, static_cast<GLsizei>(lines.size()));
+  glBindVertexArray(0);
+  glLineWidth(1.0f);
+  glEnable(GL_DEPTH_TEST);
+}
+
+void OpenGLRenderer::RenderHighlightedPath(
+    const IEditableMesh& mesh,
+    const std::vector<std::pair<uint32_t, uint32_t>>& path,
+    const glm::mat4& modelMatrix, const Camera& camera) {
+  if (path.empty() || !m_LitShader) return;
+
+  glLineWidth(6.0f);
+  glDisable(GL_DEPTH_TEST);
+  m_LitShader->Bind();
+  m_LitShader->SetUniformMat4f("u_Model", modelMatrix);
+  m_LitShader->SetUniformMat4f("u_View", camera.GetViewMatrix());
+  m_LitShader->SetUniformMat4f("u_Projection", camera.GetProjectionMatrix());
+  m_LitShader->SetUniformVec4("u_Color", SettingsManager::Get().pathHighlightColor);
+
+  std::vector<glm::vec3> lines;
+  const auto& vertices = mesh.GetVertices();
+  for (const auto& edge : path) {
+    if (edge.first < vertices.size() && edge.second < vertices.size()) {
+      lines.push_back(vertices[edge.first]);
+      lines.push_back(vertices[edge.second]);
+    }
+  }
+
+  if (lines.empty()) {
+    glEnable(GL_DEPTH_TEST);
+    glLineWidth(1.0f);
+    return;
+  }
+
+  glBindVertexArray(m_HighlightedPathVAO);
+  glBindBuffer(GL_ARRAY_BUFFER, m_HighlightedPathVBO);
+  glBufferData(GL_ARRAY_BUFFER, lines.size() * sizeof(glm::vec3), lines.data(),
+               GL_DYNAMIC_DRAW);
+  glDrawArrays(GL_LINES, 0, static_cast<GLsizei>(lines.size()));
+  glBindVertexArray(0);
+  glLineWidth(1.0f);
   glEnable(GL_DEPTH_TEST);
 }
 
@@ -328,7 +472,7 @@ void OpenGLRenderer::RenderObjectHighlight(const ISceneObject& object,
   m_HighlightShader->SetUniformMat4f("u_View", camera.GetViewMatrix());
   m_HighlightShader->SetUniformMat4f("u_Projection",
                                      camera.GetProjectionMatrix());
-  m_HighlightShader->SetUniform4f("u_Color", 1.0f, 0.8f, 0.0f, 1.0f);
+  m_HighlightShader->SetUniform4f("u_Color", SettingsManager::Get().vertexHighlightColor);
 
   glBindVertexArray(res.vao);
   glDrawElements(GL_TRIANGLES, res.indexCount, GL_UNSIGNED_INT, nullptr);
@@ -566,7 +710,5 @@ void OpenGLRenderer::createGridResources(const Grid& grid) {
   glEnableVertexAttribArray(0);
   glBindVertexArray(0);
 
-  // This is correct: we are intentionally modifying the 'dirty' flag on a const
-  // object.
   const_cast<Grid&>(grid).SetMeshDirty(false);
 }

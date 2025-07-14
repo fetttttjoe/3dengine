@@ -16,7 +16,7 @@
 
 #include "Core/Log.h"
 #include "Core/PropertyNames.h"
-#include "Sculpting/SculptableMesh.h"  // Needed for ISceneObject implementation
+#include "Sculpting/SculptableMesh.h"  
 #include "imgui.h"
 #include "imgui_stdlib.h"
 

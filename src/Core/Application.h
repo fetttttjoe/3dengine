@@ -22,7 +22,6 @@ class SubObjectSelection;
 class MeshEditor;
 
 enum class EditorMode { TRANSFORM, SCULPT, SUB_OBJECT };
-enum class SubObjectMode { VERTEX, EDGE, FACE };
 
 class Application {
  public:
@@ -39,7 +38,7 @@ class Application {
   OpenGLRenderer* GetRenderer() const { return m_Renderer.get(); }
   Camera* GetCamera() const { return m_Camera.get(); }
   GLFWwindow* GetWindow() { return m_Window; }
-  SubObjectSelection* GetSelection() const { return m_Selection.get(); }
+  SubObjectSelection* GetSelection() { return m_Selection.get(); }
 
   // --- State Management ---
   void SelectObject(uint32_t id);
@@ -71,16 +70,14 @@ class Application {
   void RequestObjectCreation(const std::string& typeName);
   void RequestExtrude(float distance);
   void RequestWeld();
+  void RequestBevelEdge(float amount);
   void RequestMoveSelection(float distance);
 
   // --- Singleton Accessor ---
   static Application& Get();
 
 #if defined(INTUITIVE_MODELER_TESTING)
-  // This function is only visible to the test build
-  void ProcessPendingActions_ForTests() {
-    ProcessPendingActions();
-  }
+  void ProcessPendingActions_ForTests() { ProcessPendingActions(); }
 #endif
 
  private:
@@ -88,16 +85,17 @@ class Application {
   void Cleanup();
   void RegisterObjectTypes();
 
+  void Update();
+  void Render();
+
   void ProcessPendingActions();
   void processGlobalKeyboardShortcuts();
   void processMouseActions();
   void processSculpting();
 
   static void framebuffer_size_callback(GLFWwindow* window, int w, int h);
-  static void scroll_callback(GLFWwindow* window, double xoffset,
-                              double yoffset);
-  static void cursor_position_callback(GLFWwindow* window, double xpos,
-                                       double ypos);
+  static void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
+  static void cursor_position_callback(GLFWwindow* window, double xpos, double ypos);
   static void error_callback(int error, const char* desc);
 
   // --- Singleton Instance ---
@@ -120,30 +118,29 @@ class Application {
   std::unique_ptr<SubObjectSelection> m_Selection;
   std::unique_ptr<MeshEditor> m_MeshEditor;
 
-  // --- State ---
   EditorMode m_EditorMode = EditorMode::TRANSFORM;
   SculptMode::Mode m_SculptMode = SculptMode::Pull;
   SubObjectMode m_SubObjectMode = SubObjectMode::VERTEX;
-  float m_LastFrame = 0.0f;
-  float m_DeltaTime = 0.0f;
+  float m_LastFrame = 0.0f, m_DeltaTime = 0.0f;
   bool m_ShowAnchors = true;
   bool m_ShowSettingsWindow = false;
   bool m_ShowMetricsWindow = false;
 
-  // --- Dirty Flag for Rendering ---
   bool m_SceneRenderRequested = true;
 
-  // --- Input State ---
   glm::vec2 m_LastViewportSize = {0, 0};
   bool m_IsDraggingGizmo = false;
   bool m_IsSculpting = false;
+  ISceneObject* m_DraggedObject = nullptr;
+  float m_DragNDCDepth = 0.0f;
 
-  // --- Pending Action Queues ---
   std::vector<std::string> m_RequestedCreationTypeNames;
   uint32_t m_RequestedDuplicateID = 0;
   std::vector<uint32_t> m_RequestedDeletionIDs;
   bool m_ExtrudeRequested = false;
   float m_ExtrudeDistance = 0.1f;
+  bool m_BevelRequested = false;
+  float m_BevelAmount = 0.1f;
   bool m_WeldRequested = false;
   bool m_MoveSelectionRequested = false;
   float m_MoveSelectionDistance = 0.1f;

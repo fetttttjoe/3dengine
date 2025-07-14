@@ -55,16 +55,13 @@ TEST_F(UITest, ExtrudeOperation_IncreasesMeshComplexity) {
     size_t initialVertexCount = mesh->GetVertices().size();
     size_t initialIndexCount = mesh->GetIndices().size();
 
-    // Setup: Manually select a face for the test
     app.SetEditorMode(EditorMode::SUB_OBJECT, SculptMode::Pull, SubObjectMode::FACE);
-    app.GetSelection()->SelectFace_ForTests(0); // Select the first face
+    app.GetSelection()->SelectFaceForTest(0); // CORRECTED: Consistent function name
     ASSERT_EQ(app.GetSelection()->GetSelectedFaces().size(), 1);
 
-    // Action: Request an extrude operation
     app.RequestExtrude(0.2f);
     app.ProcessPendingActions_ForTests();
 
-    // Assertion: Verify that vertices and indices were added
     EXPECT_GT(mesh->GetVertices().size(), initialVertexCount);
     EXPECT_GT(mesh->GetIndices().size(), initialIndexCount);
 }
@@ -74,24 +71,21 @@ TEST_F(UITest, WeldOperation_MergesVertices) {
     auto* mesh = test_object_ptr->GetEditableMesh();
     ASSERT_NE(mesh, nullptr);
 
-    // Setup: Manually select two vertices to weld
-    app.GetSelection()->SelectVertex_ForTests(0);
-    app.GetSelection()->SelectVertex_ForTests(5); // Pick another vertex
+    // CORRECTED: Consistent function name
+    app.GetSelection()->SelectVertexForTest(0);
+    app.GetSelection()->SelectVertexForTest(5);
     ASSERT_EQ(app.GetSelection()->GetSelectedVertices().size(), 2);
 
     glm::vec3 initialPos0 = mesh->GetVertices()[0];
     glm::vec3 initialPos5 = mesh->GetVertices()[5];
     glm::vec3 expectedWeldPoint = (initialPos0 + initialPos5) / 2.0f;
 
-    // Action: Request a weld operation
     app.RequestWeld();
     app.ProcessPendingActions_ForTests();
 
-    // Assertion: Verify that the first vertex moved to the average position
-    // and the selection was cleared.
     glm::vec3 finalPos0 = mesh->GetVertices()[0];
     EXPECT_NEAR(glm::distance(finalPos0, expectedWeldPoint), 0.0f, 1e-5f);
-    EXPECT_TRUE(app.GetSelection()->GetSelectedVertices().empty()) << "Selection should be cleared after welding.";
+    EXPECT_TRUE(app.GetSelection()->GetSelectedVertices().empty());
 }
 
 TEST_F(UITest, MoveAlongNormalOperation_DisplacesVertices) {
@@ -99,22 +93,19 @@ TEST_F(UITest, MoveAlongNormalOperation_DisplacesVertices) {
     auto* mesh = test_object_ptr->GetEditableMesh();
     ASSERT_NE(mesh, nullptr);
 
-    // Setup: Select a vertex and record its initial state
     const uint32_t vertexIndexToMove = 10;
-    app.GetSelection()->SelectVertex_ForTests(vertexIndexToMove);
+    app.GetSelection()->SelectVertexForTest(vertexIndexToMove); // CORRECTED: Consistent function name
     ASSERT_EQ(app.GetSelection()->GetSelectedVertices().size(), 1);
     
-    mesh->RecalculateNormals(); // Ensure normals are up-to-date
+    mesh->RecalculateNormals();
     glm::vec3 initialPos = mesh->GetVertices()[vertexIndexToMove];
     glm::vec3 normal = mesh->GetNormals()[vertexIndexToMove];
-    ASSERT_GT(glm::length(normal), 0.0f); // Ensure we have a valid normal
+    ASSERT_GT(glm::length(normal), 0.0f);
 
-    // Action: Request a move operation
     const float moveDist = 0.25f;
     app.RequestMoveSelection(moveDist);
     app.ProcessPendingActions_ForTests();
 
-    // Assertion: Verify the vertex moved in the correct direction and by the correct amount
     glm::vec3 finalPos = mesh->GetVertices()[vertexIndexToMove];
     glm::vec3 displacement = finalPos - initialPos;
 

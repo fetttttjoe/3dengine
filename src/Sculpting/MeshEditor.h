@@ -8,6 +8,7 @@ class MeshEditor {
   void Extrude(IEditableMesh& mesh, const SubObjectSelection& selection,
                float distance);
   void Weld(IEditableMesh& mesh, SubObjectSelection& selection);
+  void BevelEdges(IEditableMesh& mesh, const SubObjectSelection& selection, float amount);
   void MoveAlongNormal(IEditableMesh& mesh, const SubObjectSelection& selection,
                        float distance);
 };

@@ -2,19 +2,27 @@
 
 #include <glm/glm.hpp>
 #include <unordered_set>
-
-#include "Core/Application.h"
+#include <vector>
+#include <functional>
+#include "Sculpting/ISculptTool.h"
 
 class IEditableMesh;
+class Camera;
+
+// Custom hash for std::pair, used for storing edges
+struct PairHash {
+    template <class T1, class T2>
+    std::size_t operator() (const std::pair<T1, T2> &pair) const {
+        return std::hash<T1>()(pair.first) ^ (std::hash<T2>()(pair.second) << 1);
+    }
+};
 
 class SubObjectSelection {
  public:
   SubObjectSelection();
 
-  void OnMouseDown(IEditableMesh& mesh, const glm::vec3& rayOrigin,
-                   const glm::vec3& rayDirection, const glm::mat4& modelMatrix,
-                   const glm::vec2& mouseScreenPos, const glm::mat4& viewMatrix,
-                   const glm::mat4& projectionMatrix, int viewportWidth,
+  void OnMouseDown(IEditableMesh& mesh, const Camera& camera, const glm::mat4& modelMatrix,
+                   const glm::vec2& mouseScreenPos, int viewportWidth,
                    int viewportHeight, bool isShiftPressed, SubObjectMode mode);
   void OnMouseDrag(const glm::vec2& mouseDelta);
   void OnMouseRelease(IEditableMesh& mesh);
@@ -26,40 +34,57 @@ class SubObjectSelection {
                  int viewportHeight);
 
   const std::unordered_set<uint32_t>& GetSelectedVertices() const;
+  const std::unordered_set<std::pair<uint32_t, uint32_t>, PairHash>& GetSelectedEdges() const;
   const std::unordered_set<uint32_t>& GetSelectedFaces() const;
+  const std::vector<std::pair<uint32_t, uint32_t>>& GetHighlightedPath() const;
+
+  void SetIgnoreBackfaces(bool ignore) { m_IgnoreBackfaces = ignore; }
+  bool GetIgnoreBackfaces() const { return m_IgnoreBackfaces; }
 
 #if defined(INTUITIVE_MODELER_TESTING)
   // --- Test-only Helper Methods ---
 
-  // This is a public wrapper that allows tests to call the private FindClosestVertex function.
   int FindClosestVertex_ForTests(const IEditableMesh& mesh, const glm::mat4& modelMatrix,
                                  const glm::vec2& mouseScreenPos,
                                  const glm::mat4& viewMatrix,
-                                 const glm::mat4& projectionMatrix, int viewportWidth,
-                                 int viewportHeight, float pickPixelThreshold) const {
-      // It simply forwards the call to the private implementation.
+                                 const glm::mat4& projectionMatrix, const glm::vec3& cameraFwd,
+                                 int viewportWidth, int viewportHeight, float pickPixelThreshold) const {
       return FindClosestVertex(mesh, modelMatrix, mouseScreenPos, viewMatrix,
-                               projectionMatrix, viewportWidth, viewportHeight, pickPixelThreshold);
+                               projectionMatrix, cameraFwd, viewportWidth, viewportHeight, pickPixelThreshold);
   }
 
-  // These methods allow tests to directly manipulate the selection state.
-  void SelectVertex_ForTests(uint32_t vertexIndex) {
-    m_SelectedVertices.insert(vertexIndex);
+  std::pair<int, int> FindClosestEdge_ForTests(const IEditableMesh& mesh, const glm::mat4& modelMatrix,
+                                 const glm::vec2& mouseScreenPos,
+                                 const glm::mat4& viewMatrix,
+                                 const glm::mat4& projectionMatrix, const glm::vec3& cameraFwd,
+                                 int viewportWidth, int viewportHeight, float pickPixelThreshold) const {
+      return FindClosestEdge(mesh, modelMatrix, mouseScreenPos, viewMatrix,
+                             projectionMatrix, cameraFwd, viewportWidth, viewportHeight, pickPixelThreshold);
   }
-  void SelectFace_ForTests(uint32_t faceIndex) {
-    m_SelectedFaces.insert(faceIndex);
-  }
+
+  void SelectVertexForTest(uint32_t vertexIndex) { m_SelectedVertices.insert(vertexIndex); }
+  void SelectFaceForTest(uint32_t faceIndex) { m_SelectedFaces.insert(faceIndex); }
 #endif
 
  private:
+  void FindShortestPath(IEditableMesh& mesh, uint32_t startNode, uint32_t endNode);
   int FindClosestVertex(const IEditableMesh& mesh, const glm::mat4& modelMatrix,
-                        const glm::vec2& mouseScreenPos,
-                        const glm::mat4& viewMatrix,
-                        const glm::mat4& projectionMatrix, int viewportWidth,
-                        int viewportHeight, float pickPixelThreshold) const;
+                        const glm::vec2& mouseScreenPos, const glm::mat4& viewMatrix,
+                        const glm::mat4& projectionMatrix, const glm::vec3& cameraFwd,
+                        int viewportWidth, int viewportHeight, float pickPixelThreshold) const;
+
+  std::pair<int, int> FindClosestEdge(const IEditableMesh& mesh, const glm::mat4& modelMatrix,
+                                      const glm::vec2& mouseScreenPos, const glm::mat4& viewMatrix,
+                                      const glm::mat4& projectionMatrix, const glm::vec3& cameraFwd,
+                                      int viewportWidth, int viewportHeight, float pickPixelThreshold) const;
 
   std::unordered_set<uint32_t> m_SelectedVertices;
+  std::unordered_set<std::pair<uint32_t, uint32_t>, PairHash> m_SelectedEdges;
   std::unordered_set<uint32_t> m_SelectedFaces;
+  std::vector<std::pair<uint32_t, uint32_t>> m_HighlightedPath;
+  std::vector<uint32_t> m_SelectionOrder;
+  
+  bool m_IgnoreBackfaces = true;
 
   bool m_IsDragging = false;
   int m_ActiveDragVertexIndex = -1;

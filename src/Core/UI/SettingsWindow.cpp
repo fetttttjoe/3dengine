@@ -22,29 +22,31 @@ void SettingsWindow::RevertToSavedSettings() {
 }
 
 void SettingsWindow::Draw() {
-  // This is now the single source of truth for visibility
   m_IsVisible = m_App->GetShowSettings();
   if (!m_IsVisible) return;
 
-  // This is the crucial fix: when the window is about to appear for the first
-  // time, we initialize our temporary "live" values with the current saved
-  // settings.
   ImGui::Begin("Settings", &m_IsVisible,
-               ImGuiWindowFlags_AlwaysAutoResize);  // Added AlwaysAutoResize
-                                                    // for better initial sizing
+               ImGuiWindowFlags_AlwaysAutoResize); 
 
-  // ImGui::IsWindowAppearing() check needs to be AFTER ImGui::Begin()
   if (ImGui::IsWindowAppearing()) {
-    RevertToSavedSettings();  // Initialize temporary values when window first
-                              // appears
+    RevertToSavedSettings();
   }
 
-  // The UI now correctly modifies the initialized temporary values
   ImGui::Text("UI Settings");
   ImGui::DragFloat("Left Pane Width", &m_TempLeftPaneWidth, 1.0f, 100.0f,
                    500.0f);
   ImGui::DragFloat("Right Pane Width", &m_TempRightPaneWidth, 1.0f, 100.0f,
                    500.0f);
+  ImGui::Separator();
+
+  ImGui::Text("Highlight Colors");
+  for (const auto& desc : SettingsManager::GetDescriptors()) {
+      if (desc.type == SettingType::Color4) {
+          ImGui::ColorEdit4(desc.label.c_str(), (float*)desc.ptr);
+      }
+  }
+
+
   ImGui::Separator();
 
   ImGui::Text("World Settings");
@@ -62,27 +64,21 @@ void SettingsWindow::Draw() {
   ImGui::Separator();
 
   if (ImGui::Button("Save and Close")) {
-    // Apply the temporary values to the actual settings
     SettingsManager::Get().leftPaneWidth = m_TempLeftPaneWidth;
     SettingsManager::Get().rightPaneWidth = m_TempRightPaneWidth;
 
     if (SettingsManager::Save("settings.json")) {
       Log::Debug("SettingsManager: saved settings.json");
     }
-    m_App->SetShowSettings(false);  // Hide the window
+    m_App->SetShowSettings(false);
   }
   ImGui::SameLine();
   if (ImGui::Button("Cancel")) {
-    m_App->SetShowSettings(false);  // Hide the window without saving
-    // Temporary values will be discarded when window closes and AppUI reverts
-    // to saved
+    m_App->SetShowSettings(false);
   }
 
   ImGui::End();
 
-  // If the window is closed by the 'X' button, m_IsVisible will be false,
-  // and we update the application state. The temporary changes are implicitly
-  // discarded.
   if (!m_IsVisible) {
     m_App->SetShowSettings(false);
   }

@@ -8,10 +8,10 @@ struct BrushSettings;
 
 namespace SculptMode {
 // This enum defines different *brush tool types*.
-// MoveVertex and SelectFace have been moved out as they are now sub-object
-// modes.
-enum Mode { Pull = 0, Push, Smooth, Grab };  // Corrected enum definition
-}  // namespace SculptMode
+enum Mode { Pull = 0, Push, Smooth, Grab };
+}
+
+enum class SubObjectMode { VERTEX, EDGE, FACE };
 
 /**
  * @brief Base interface for all sculpting tools.

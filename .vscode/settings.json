@@ -87,6 +87,7 @@
     "regex": "cpp",
     "span": "cpp",
     "valarray": "cpp",
-    "typeindex": "cpp"
+    "typeindex": "cpp",
+    "queue": "cpp"
   }
 }

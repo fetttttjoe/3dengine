@@ -25,8 +25,15 @@ SettingsManager::Registrar::Registrar() {
       {"gridDivisions", "Grid Divisions", SettingType::Int,
        &s_Settings.gridDivisions},
       {"cameraSpeed", "Camera Speed", SettingType::Float,
-       &s_Settings.cameraSpeed}};
-
+       &s_Settings.cameraSpeed},
+      {"vertexHighlightColor", "Vertex Highlight", SettingType::Color4,
+       &s_Settings.vertexHighlightColor},
+      {"edgeHighlightColor", "Edge Highlight", SettingType::Color4,
+       &s_Settings.edgeHighlightColor},
+      {"pathHighlightColor", "Path Highlight", SettingType::Color4,
+       &s_Settings.pathHighlightColor},
+       {"selectedFacesColor", "Selected Faces Highlight", SettingType::Color4,
+       &s_Settings.selectedFacesColor}};
   for (const auto& desc : s_ManagerData.Descriptors) {
     s_ManagerData.DescriptorMap[desc.key] = &desc;
   }
@@ -60,6 +67,9 @@ bool SettingsManager::Load(const std::string& path) {
           case SettingType::Int:
             *static_cast<int*>(desc.ptr) = jsonValue.get<int>();
             break;
+          case SettingType::Color4:
+            *static_cast<glm::vec4*>(desc.ptr) = jsonValue.get<glm::vec4>();
+            break;
         }
       }
     }
@@ -84,6 +94,9 @@ bool SettingsManager::Save(const std::string& path) {
         break;
       case SettingType::Int:
         j[desc.key] = *static_cast<const int*>(desc.ptr);
+        break;
+      case SettingType::Color4:
+        j[desc.key] = *static_cast<const glm::vec4*>(desc.ptr);
         break;
     }
   }
