@@ -17,6 +17,7 @@ Scene::Scene(SceneObjectFactory* factory) : m_ObjectFactory(factory) {}
 
 Scene::~Scene() = default;
 
+// Existing Clear method (only removes selectable objects)
 void Scene::Clear() {
   m_Objects.erase(
       std::remove_if(m_Objects.begin(), m_Objects.end(),
@@ -30,9 +31,18 @@ void Scene::Clear() {
   for (const auto& o : m_Objects) {
     if (o) maxId = std::max(maxId, o->id);
   }
-  m_NextObjectID = maxId + 1;
+  m_NextObjectID = maxId + 1; // Update next ID based on what remains
   Application::Get().RequestSceneRender();
 }
+
+void Scene::ClearAllObjects() {
+    m_Objects.clear();
+    m_DeferredDeletions.clear();
+    m_SelectedIndex = -1;
+    m_NextObjectID = 1; // Reset to initial ID
+    Application::Get().RequestSceneRender();
+}
+
 
 void Scene::ProcessDeferredDeletions() {
   if (m_DeferredDeletions.empty()) {
@@ -87,8 +97,12 @@ void Scene::Load(const std::string& filepath) {
   }
   nlohmann::json sceneJson;
   in >> sceneJson;
-  Clear();
-  m_NextObjectID = sceneJson.value("next_object_id", 1);
+  // Use ClearAllObjects to ensure a clean state before loading
+  // This might be redundant if ClearAllObjects is always called in test SetUp,
+  // but it's good practice for scene loading in general.
+  ClearAllObjects(); // Ensure full reset
+  m_NextObjectID = sceneJson.value("next_object_id", 1); // Set from JSON
+
   const auto& arr = sceneJson["objects"];
   for (const auto& objJson : arr) {
     std::string type = objJson.value("type", "");
@@ -100,8 +114,6 @@ void Scene::Load(const std::string& filepath) {
   }
   Application::Get().RequestSceneRender();
 }
-
-// The old LoadMeshFromFile function has been completely removed from this file.
 
 void Scene::AddObject(std::unique_ptr<ISceneObject> object) {
   if (!object) return;

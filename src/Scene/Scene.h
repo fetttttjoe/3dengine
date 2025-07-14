@@ -33,6 +33,8 @@ class Scene {
 
   /// Remove all selectable objects, reset IDs & selection.
   void Clear();
+  /// Remove all objects (selectable and non-selectable) and reset IDs.
+  void ClearAllObjects(); // <--- NEW METHOD
   /// Processes the queue of objects marked for deletion.
   void ProcessDeferredDeletions();
 
