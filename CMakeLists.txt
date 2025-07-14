@@ -109,8 +109,8 @@ add_executable(runTests
     tests/ResourceManagerTests.cpp
     tests/TestMock.cpp
     tests/RendererTests.cpp
-    tests/ApplicationTests.cpp 
-    tests/UITests.cpp          
+    tests/ApplicationTests.cpp
+    tests/UITests.cpp
 )
 target_link_libraries(runTests PRIVATE IntuitiveModeler gtest)
 target_compile_definitions(runTests PRIVATE INTUITIVE_MODELER_TESTING)
@@ -121,12 +121,14 @@ target_include_directories(runTests PRIVATE
 )
 
 # Set the output directory for the test executable
-set_target_properties(runTests PROPERTIES RUNTIME_OUTPUT_DIRECTORY 
-"${CMAKE_BINARY_DIR}/$<CONFIG>") 
+set_target_properties(runTests PROPERTIES RUNTIME_OUTPUT_DIRECTORY
+"${CMAKE_BINARY_DIR}/$<CONFIG>")
 
-# This tells CTest how to run your tests.
+# Use PRE_TEST mode to delay test discovery until ctest execution
+# This avoids running the executable during CMake configuration on any platform.
 gtest_discover_tests(runTests
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/$<CONFIG>
+    DISCOVERY_MODE PRE_TEST
 )
 # Copy the resources after the test executable is built
 add_custom_command(TARGET runTests POST_BUILD
