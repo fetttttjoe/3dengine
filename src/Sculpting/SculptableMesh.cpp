@@ -1,6 +1,6 @@
 #include "Sculpting/SculptableMesh.h"
 
-#include <algorithm>
+#include <algorithm> // For std::min_element
 #include <map>
 #include <numeric>
 
@@ -180,14 +180,15 @@ bool SculptableMesh::WeldVertices(
     const glm::vec3& weldPoint) {
   if (vertexIndices.size() < 2) return false;
 
-  uint32_t targetVertexIndex = *vertexIndices.begin();
+  // Make target vertex selection deterministic by choosing the smallest index
+  uint32_t targetVertexIndex = *std::min_element(vertexIndices.begin(), vertexIndices.end());
   m_Vertices[targetVertexIndex] = weldPoint;
 
-  std::unordered_set<uint32_t> verticesToRemove = vertexIndices;
-  verticesToRemove.erase(targetVertexIndex);
+  std::unordered_set<uint32_t> verticesToRemap = vertexIndices;
+  verticesToRemap.erase(targetVertexIndex); // Keep target vertex out of remapping set
 
   for (size_t i = 0; i < m_Indices.size(); ++i) {
-    if (verticesToRemove.count(m_Indices[i])) {
+    if (verticesToRemap.count(m_Indices[i])) { // Check if the index needs to be remapped
       m_Indices[i] = targetVertexIndex;
     }
   }
